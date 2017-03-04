@@ -70,45 +70,6 @@ The topmost match has precedence."
   "Return a nix sandbox project root from DIRECTORY."
   (or nix-shell-root (nix-shell-locate-root-directory directory)))
 
-(defun nix-shell-start-process (program &rest args)
-  "Start PROGRAM, prepare for refresh, and return the process object and ARGS."
-  (let ((process (apply #'start-file-process
-                        (file-name-nondirectory program)
-                        nix-shell-process-buffer program args)))
-    (set-process-sentinel process #'nix-shell-process-sentinel)
-    process))
-
-(defun nix-shell-process-sentinel (process event)
-  "Default sentinel used by `nix-shell-start-process'.
-
-For PROCESS and EVENT."
-  (when (memq (process-status process) '(exit signal))
-    (setq event (substring event 0 -1))
-    (when (string-match-p "^finished" event)
-      (message "%s finished" (process-name process)))))
-
-(defun nix-shell-process-filter (process string)
-  "PROCESS filter, Insert STRING in process buffer."
-  (when (buffer-live-p (process-buffer process))
-    (with-current-buffer (process-buffer process)
-      (insert string))))
-
-;; TODO(marsam): Allow check environment asynchronously
-(defun nix-shell-environment-variables-async (&rest args)
-  "Return a sandbox environment variables for ARGS."
-  (let ((process (apply #'nix-shell-start-process
-                        nix-shell-executable
-                        (append '("--run" "printenv") args))))
-    (set-process-filter process #'nix-shell-process-filter)
-    (set-process-sentinel process
-                          (lambda (proc event)
-                            (when (memq (process-status proc) '(exit signal))
-                              (nix-shell-process-sentinel proc event))
-                            (if (and (eq (process-status proc) 'exit)
-                                     (= (process-exit-status proc) 0))
-                                (message "done")
-                              (message "%s failed" (process-name process)))))))
-
 ;; FIXME(marsam): merge with the current `exec-path'.
 (defun nix-shell-extract-exec-path ()
   "Extract path variable from `process-environment' variable."
