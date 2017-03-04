@@ -87,6 +87,12 @@ The topmost match has precedence."
                  symbols)
      ,@body))
 
+(defun nix-shell-invalidate-cache (&optional directory)
+  "Invalidate nix-shell variables cache for DIRECTORY."
+  (if directory
+      (remhash directory nix-shell-variables-cache)
+    (clrhash nix-shell-variables-cache)))
+
 (defun nix-shell-locate-root-directory (directory)
   "Locate a project root DIRECTORY for a nix directory."
   (cl-loop for file in nix-shell-files
@@ -112,8 +118,11 @@ The topmost match has precedence."
     (split-string (buffer-string) "\n" 'omit-nulls)))
 
 (defun nix-shell-extract-exec-path ()
-  "Extract path variable from `process-environment' variable."
-  (cl-union (parse-colon-path (getenv "PATH")) exec-path :test 'equal))
+  "Add paths from PATH environment variable to `exec-path'.  Does not modify `exec-path'."
+  (cl-loop for path in (parse-colon-path (getenv "PATH"))
+           with exec-path = exec-path
+           do (add-to-list 'exec-path path)
+           finally return exec-path))
 
 ;;;###autoload
 (defalias 'nix-shell-register #'nix-shell-variables)
@@ -133,12 +142,12 @@ The topmost match has precedence."
 (defun nix-shell-active (directory)
   "Activate the nix-shell in DIRECTORY."
   (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
-  (if-let ((shell-vars (nix-shell-variables directory)))
+  (if-let ((shell-vars (nix-shell-variables (file-truename directory))))
       (setq nix-shell-old-exec-path exec-path
             nix-shell-old-process-environment process-environment
             exec-path (nix-shell-exec-path shell-vars)
             process-environment (nix-shell-process-environment shell-vars))
-    (error "Not inside a nix-shell project: %s" directory)))
+    (user-error "Not inside a nix-shell project: %s" directory)))
 
 ;;;###autoload
 (defun nix-shell-deactivate ()
@@ -156,12 +165,12 @@ The topmost match has precedence."
   "Execute nix-shell DIRECTORY and BODY."
   (declare (indent defun) (debug (body)))
   (nix-shell-with-gensyms (shell-root shell-vars)
-    `(if-let ((,shell-root (nix-shell-root ,(expand-file-name directory)))
-              (,shell-vars (nix-shell-variables ,shell-root)))
+    `(if-let ((,shell-root (nix-shell-root ,directory))
+              (,shell-vars (nix-shell-variables (file-truename ,shell-root))))
          (let* ((exec-path (nix-shell-exec-path ,shell-vars))
                 (process-environment (nix-shell-process-environment ,shell-vars)))
            ,@body)
-       (error "Not inside a nix-shell project: %s" default-directory))))
+       (user-error "Not inside a nix-shell project: %s" ,directory))))
 
 (provide 'nix-shell)
 ;;; nix-shell.el ends here
