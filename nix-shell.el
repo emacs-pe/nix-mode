@@ -61,8 +61,11 @@ The topmost match has precedence."
   :type '(repeat string)
   :group 'nix-shell)
 
-(defvar nix-shell-process-buffer "*nix-shell*")
 (defvar nix-shell-variables-cache (make-hash-table :test 'equal))
+(defvar nix-shell-old-process-environment nil
+  "The old process environment before the last activate.")
+(defvar nix-shell-old-exec-path nil
+  "The old exec path before the last activate.")
 
 (cl-defstruct (nix-shell (:constructor nix-shell-new))
   "A structure holding the information of nix-shell."
@@ -112,8 +115,12 @@ The topmost match has precedence."
   "Extract path variable from `process-environment' variable."
   (cl-union (parse-colon-path (getenv "PATH")) exec-path :test 'equal))
 
+;;;###autoload
+(defalias 'nix-shell-register #'nix-shell-variables)
+;;;###autoload
 (defun nix-shell-variables (directory &rest args)
   "Get the environment variables from a nix-shell from DIRECTORY."
+  (interactive "Dregister nix-shell: ")
   (or (gethash directory nix-shell-variables-cache)
       (puthash directory (nix-shell-with-default-directory directory
                            ;; XXX: Check if the nix sandbox is ready for consumption
@@ -121,6 +128,28 @@ The topmost match has precedence."
                            (let ((process-environment (apply #'nix-shell-exec-lines (append '("--run" "printenv") args))))
                              (nix-shell-new :exec-path (nix-shell-extract-exec-path) :process-environment process-environment)))
                nix-shell-variables-cache)))
+
+;;;###autoload
+(defun nix-shell-active (directory)
+  "Activate the nix-shell in DIRECTORY."
+  (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
+  (if-let ((shell-vars (nix-shell-variables directory)))
+      (setq nix-shell-old-exec-path exec-path
+            nix-shell-old-process-environment process-environment
+            exec-path (nix-shell-exec-path shell-vars)
+            process-environment (nix-shell-process-environment shell-vars))
+    (error "Not inside a nix-shell project: %s" directory)))
+
+;;;###autoload
+(defun nix-shell-deactivate ()
+  "Disable nix-shell."
+  (interactive)
+  (and nix-shell-old-exec-path
+       (setq exec-path nix-shell-old-exec-path
+             nix-shell-old-exec-path nil))
+  (and nix-shell-old-process-environment
+       (setq process-environment nix-shell-old-process-environment
+             nix-shell-old-process-environment nil)))
 
 ;;;###autoload
 (defmacro nix-shell-with-shell (directory &rest body)
