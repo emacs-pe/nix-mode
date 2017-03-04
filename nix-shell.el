@@ -5,7 +5,7 @@
 ;; Author: Mario Rodas <marsam@users.noreply.github.com>
 ;; Keywords: convenience
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24.3"))
+;; Package-Requires: ((emacs "25.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -25,6 +25,10 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
+;;
+;; TODO:
+;;
+;; + [ ] Document integration with FlyCheck and related tools
 
 ;;; Code:
 (eval-when-compile (require 'cl-lib))
@@ -58,7 +62,27 @@ The topmost match has precedence."
   :group 'nix-shell)
 
 (defvar nix-shell-process-buffer "*nix-shell*")
-(defvar nix-shell-environment-cache (make-hash-table :test 'equal))
+(defvar nix-shell-variables-cache (make-hash-table :test 'equal))
+
+(cl-defstruct (nix-shell (:constructor nix-shell-new))
+  "A structure holding the information of nix-shell."
+  exec-path process-environment)
+
+(defmacro nix-shell-with-default-directory (directory &rest body)
+  "Set `default-directory' to DIRECTORY and execute BODY."
+  (declare (indent defun) (debug t))
+  `(let ((default-directory (or (and ,directory
+                                     (file-name-as-directory ,directory))
+                                default-directory)))
+     ,@body))
+
+(defmacro nix-shell-with-gensyms (symbols &rest body)
+  "Bind the SYMBOLS to fresh uninterned symbols and eval BODY."
+  (declare (indent 1))
+  `(let ,(mapcar (lambda (s)
+                   `(,s (cl-gensym (symbol-name ',s))))
+                 symbols)
+     ,@body))
 
 (defun nix-shell-locate-root-directory (directory)
   "Locate a project root DIRECTORY for a nix directory."
@@ -70,31 +94,45 @@ The topmost match has precedence."
   "Return a nix sandbox project root from DIRECTORY."
   (or nix-shell-root (nix-shell-locate-root-directory directory)))
 
-;; FIXME(marsam): merge with the current `exec-path'.
+(defun nix-shell-exec-insert (&rest args)
+  "Execute `nix-shell-executable' with ARGS, inserting its output at point."
+  (apply #'process-file nix-shell-executable nil (list t nil) nil args))
+
+(defun nix-shell-exec-exit-code (&rest args)
+  "Execute `nix-shell-executable' with ARGS, returning its exit code."
+  (apply #'process-file nix-shell-executable nil nil nil args))
+
+(defun nix-shell-exec-lines (&rest args)
+  "Execute `nix-shell-executable' with ARGS, returning its output as a list of lines."
+  (with-temp-buffer
+    (apply #'nix-shell-exec-insert args)
+    (split-string (buffer-string) "\n" 'omit-nulls)))
+
 (defun nix-shell-extract-exec-path ()
   "Extract path variable from `process-environment' variable."
-  (parse-colon-path (getenv "PATH")))
+  (cl-union (parse-colon-path (getenv "PATH")) exec-path :test 'equal))
 
-(defun nix-shell-environment-variables (directory &rest args)
+(defun nix-shell-variables (directory &rest args)
   "Get the environment variables from a nix-shell from DIRECTORY."
-  (or (gethash directory nix-shell-environment-cache)
-      (puthash directory (let ((default-directory directory))
-                           (apply #'process-lines
-                                  nix-shell-executable
-                                  (append '("--run" "printenv") args)))
-               nix-shell-environment-cache)))
+  (or (gethash directory nix-shell-variables-cache)
+      (puthash directory (nix-shell-with-default-directory directory
+                           ;; XXX: Check if the nix sandbox is ready for consumption
+                           (cl-assert (zerop (nix-shell-exec-exit-code "--run" "true")) nil "Nix shell is not available in %s" directory)
+                           (let ((process-environment (apply #'nix-shell-exec-lines (append '("--run" "printenv") args))))
+                             (nix-shell-new :exec-path (nix-shell-extract-exec-path) :process-environment process-environment)))
+               nix-shell-variables-cache)))
 
 ;;;###autoload
 (defmacro nix-shell-with-shell (directory &rest body)
   "Execute nix-shell DIRECTORY and BODY."
   (declare (indent defun) (debug (body)))
-  (let ((toplevel (cl-gensym "toplevel")))
-    `(let ((,toplevel (nix-shell-root (file-name-as-directory (expand-file-name ,directory)))))
-       (if ,toplevel
-           (let* ((process-environment (nix-shell-environment-variables ,toplevel))
-                  (exec-path (nix-shell-extract-exec-path)))
-             ,@body)
-         (error "Not inside a nix-shell project: %s" default-directory)))))
+  (nix-shell-with-gensyms (shell-root shell-vars)
+    `(if-let ((,shell-root (nix-shell-root ,(expand-file-name directory)))
+              (,shell-vars (nix-shell-variables ,shell-root)))
+         (let* ((exec-path (nix-shell-exec-path ,shell-vars))
+                (process-environment (nix-shell-process-environment ,shell-vars)))
+           ,@body)
+       (error "Not inside a nix-shell project: %s" default-directory))))
 
 (provide 'nix-shell)
 ;;; nix-shell.el ends here
