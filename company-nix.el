@@ -1,9 +1,8 @@
 ;;; company-nix.el --- Company backend for nix expressions -*- lexical-binding: t -*-
 
-;; Copyright (c) 2015 Mario Rodas <marsam@users.noreply.github.com>
+;; Copyright (C) 2017 Mario Rodas <marsam@users.noreply.github.com>
 
 ;; Author: Mario Rodas <marsam@users.noreply.github.com>
-;; URL:
 ;; Keywords: convenience
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "25.1") (company "0.8.0"))

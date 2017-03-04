@@ -1,6 +1,6 @@
 ;;; nix-options.el --- Nix options                    -*- lexical-binding: t -*-
 
-;; Copyright (c) 2016 Mario Rodas <marsam@users.noreply.github.com>
+;; Copyright (C) 2017 Mario Rodas <marsam@users.noreply.github.com>
 
 ;; Author: Mario Rodas <marsam@users.noreply.github.com>
 ;; Keywords: convenience
