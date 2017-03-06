@@ -27,6 +27,8 @@
 ;;; Commentary:
 ;; A major mode for [Nix][] expressions.
 ;;
+;; ![screenshot](https://github.com/emacs-pe/nix-mode/raw/master/assets/screenshot.png)
+;;
 ;; TODO:
 ;;
 ;; + [ ] Multiline strings
