@@ -64,14 +64,17 @@
     ;; Constants
     (,(regexp-opt '("true" "false" "null") 'symbols) . font-lock-constant-face)
 
-    ;; Urls.
-    (,(rx alpha (zero-or-more (in alnum "+.-")) ":" (one-or-more (in alnum punctuation))) . font-lock-constant-face)
+    ;; Imports. i.e ./some/file.nix and <nixpkgs>
+    (,(rx symbol-start "import" (1+ space) (group (1+ (in alnum "<>+./-"))) symbol-end)
+     (1 font-lock-function-name-face))
 
-    ;; Angle brackets path: i.e. <nixpkgs>
-    (,(rx "<" (one-or-more (in alnum "+.-")) (zero-or-more "/" (in alnum "+.-")) ">") . font-lock-constant-face)
+    ;; Urls.
+    (,(rx symbol-start (group alpha (0+ (in alnum "+.-")) ":" (1+ (in alnum punct))) symbol-end)
+     (1 font-lock-string-face))
 
     ;; Assignments
-    (,(rx symbol-start (group (in alpha "_") (zero-or-more (in alnum "_.'-") )) (zero-or-more space) "=") 1 font-lock-variable-name-face))
+    (,(rx symbol-start (group (in alpha "_") (zero-or-more (in alnum "_.'-"))) (zero-or-more space) "=")
+     (1 font-lock-variable-name-face)))
   "Font lock keywords for nix.")
 
 (defvar nix-mode-syntax-table
