@@ -178,7 +178,8 @@ If FROM-HOMEPAGE is non nil will download options file from nixos.org."
                            (make-text-button declaration nil
                                              'follow-link t
                                              'action 'nix-options-decl-action
-                                             'declaration declaration))
+                                             'declaration declaration
+                                             'help-echo "mouse-2, RET: goto declaration"))
                          declarations)
                  "\n")))
 
