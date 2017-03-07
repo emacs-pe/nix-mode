@@ -101,6 +101,11 @@
     table)
   "Syntax table for Nix mode.")
 
+(defconst nix--prettify-symbols-alist
+  '((">=" . ?≥)
+    ("<=" . ?≤))
+  "Alist of symbol prettifications for Nix.")
+
 ;; FIXME: replace this with smie support
 (defun nix-indent-line ()
   "Indent current line in a Nix expression."
@@ -116,6 +121,7 @@
   (setq-local comment-start "# ")
   (setq-local comment-start-skip "#+\\s-*")
   (setq-local parse-sexp-lookup-properties t)
+  (setq-local prettify-symbols-alist nix--prettify-symbols-alist)
   (setq-local indent-line-function 'nix-indent-line))
 
 ;;;###autoload
