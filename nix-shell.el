@@ -32,6 +32,7 @@
 
 ;;; Code:
 (eval-when-compile (require 'cl-lib))
+(require 'nix-common)
 
 (defgroup nix-shell nil
   "nix-shell integration"
@@ -71,22 +72,6 @@ The topmost match has precedence."
   "A structure holding the information of nix-shell."
   exec-path process-environment)
 
-(defmacro nix-shell-with-default-directory (directory &rest body)
-  "Set `default-directory' to DIRECTORY and execute BODY."
-  (declare (indent defun) (debug t))
-  `(let ((default-directory (or (and ,directory
-                                     (file-name-as-directory ,directory))
-                                default-directory)))
-     ,@body))
-
-(defmacro nix-shell-with-gensyms (symbols &rest body)
-  "Bind the SYMBOLS to fresh uninterned symbols and eval BODY."
-  (declare (indent 1))
-  `(let ,(mapcar (lambda (s)
-                   `(,s (cl-gensym (symbol-name ',s))))
-                 symbols)
-     ,@body))
-
 (defun nix-shell-invalidate-cache (&optional directory)
   "Invalidate nix-shell variables cache for DIRECTORY."
   (if directory
@@ -103,20 +88,6 @@ The topmost match has precedence."
   "Return a nix sandbox project root from DIRECTORY."
   (or nix-shell-root (nix-shell-locate-root-directory directory)))
 
-(defun nix-shell-exec-insert (&rest args)
-  "Execute `nix-shell-executable' with ARGS, inserting its output at point."
-  (apply #'process-file nix-shell-executable nil (list t nil) nil args))
-
-(defun nix-shell-exec-exit-code (&rest args)
-  "Execute `nix-shell-executable' with ARGS, returning its exit code."
-  (apply #'process-file nix-shell-executable nil nil nil args))
-
-(defun nix-shell-exec-lines (&rest args)
-  "Execute `nix-shell-executable' with ARGS, returning its output as a list of lines."
-  (with-temp-buffer
-    (apply #'nix-shell-exec-insert args)
-    (split-string (buffer-string) "\n" 'omit-nulls)))
-
 (defun nix-shell-extract-exec-path ()
   "Add paths from PATH environment variable to `exec-path'.  Does not modify `exec-path'."
   (cl-loop for path in (parse-colon-path (getenv "PATH"))
@@ -131,10 +102,10 @@ The topmost match has precedence."
   "Get the environment variables from a nix-shell from DIRECTORY."
   (interactive "Dregister nix-shell: ")
   (or (gethash directory nix-shell-variables-cache)
-      (puthash directory (nix-shell-with-default-directory directory
+      (puthash directory (nix-with-default-directory directory
                            ;; XXX: Check if the nix sandbox is ready for consumption
-                           (cl-assert (zerop (nix-shell-exec-exit-code "--run" "true")) nil "Nix shell is not available in %s" directory)
-                           (let ((process-environment (apply #'nix-shell-exec-lines (append '("--run" "printenv") args))))
+                           (cl-assert (nix-exec-success nix-shell-executable "--run" "true") nil "Nix shell is not available in %s" directory)
+                           (let ((process-environment (apply #'nix-exec-lines nix-shell-executable (append '("--run" "printenv") args))))
                              (nix-shell-new :exec-path (nix-shell-extract-exec-path) :process-environment process-environment)))
                nix-shell-variables-cache)))
 
@@ -164,7 +135,7 @@ The topmost match has precedence."
 (defmacro nix-shell-with-shell (directory &rest body)
   "Execute nix-shell DIRECTORY and BODY."
   (declare (indent defun) (debug (body)))
-  (nix-shell-with-gensyms (shell-root shell-vars)
+  (nix-with-gensyms (shell-root shell-vars)
     `(if-let ((,shell-root (nix-shell-root ,directory))
               (,shell-vars (nix-shell-variables (file-truename ,shell-root))))
          (let* ((exec-path (nix-shell-exec-path ,shell-vars))

@@ -9,6 +9,7 @@
  "nix-options.el"
  "nix-repl.el"
  "nix-shell.el"
+ "nix-common.el"
  )
 
 (depends-on "company")
