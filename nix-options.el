@@ -34,10 +34,10 @@
   (require 'subr-x)
   (require 'let-alist))
 
-(require 'pcase)
 (require 'json)
+(require 'nix-common)
 
-(declare-function nix-mode "nix-mode" nil)
+(declare-function nix-mode "nix-mode")
 
 (defgroup nix-options nil
   "Interface for NixOS options."
@@ -69,6 +69,8 @@
 (defvar nix-options-empty-string "not given")
 (defvar nix-options-show-history nil)
 (defvar nix-options-show-buffer-name "*NixOS option*")
+(defvar nix-options-process-environment '("LC_ALL=C" "NIXPKGS_ALLOW_UNFREE=1")
+  "Prepended to `process-environment' while running nix-build.")
 
 (defvar nix-options (make-hash-table :test 'equal))
 
@@ -101,12 +103,8 @@
 
 (defun nix-options-generate-json-options ()
   "Generate json options."
-  (let* ((process-environment (append '("LC_ALL=C" "NIXPKGS_ALLOW_UNFREE=1")
-                                      process-environment))
-         (command "nix-build -Q --no-out-link '<nixpkgs/nixos/release.nix>' -A options")
-         ;; FIXME: Check exit code
-         (outlines (split-string (shell-command-to-string command) "\n" 'omit-nulls))
-         (directory (car (last outlines))))
+  (let* ((process-environment (append nix-options-process-environment process-environment))
+         (directory (nix-exec-string "nix-build" "-Q" "--no-out-link" "<nixpkgs/nixos/release.nix>" "-A" "options")))
     (expand-file-name "share/doc/nixos/options.json" directory)))
 
 (defun nix-options-http-fetch ()
@@ -144,9 +142,7 @@ If FROM-HOMEPAGE is non nil will download options file from nixos.org."
 
 (defun nix-options-locate-declaration (file-name)
   "Locate a nix declaration for nix FILE-NAME."
-  ;; FIXME: check exit-code
-  (let ((command (combine-and-quote-strings (list "nix-instantiate" "--find-file" (concat "nixpkgs/" file-name)))))
-    (string-trim (shell-command-to-string command))))
+  (nix-exec-string "nix-instantiate" "--find-file" (concat "nixpkgs/" file-name)))
 
 (defun nix-options-display-default (option)
   "Return a display string for an nix OPTION default."
