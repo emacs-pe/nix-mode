@@ -52,12 +52,26 @@
 
 (defvar nix-font-lock-keywords
   ;; keywords
-  `(,(rx symbol-start
-         (or
-          "if" "then" "else" "with" "let" "in" "rec" "inherit" "or"
-          "builtins" "baseNameOf" "derivation" "dirOf" "fetchTarball"
-          "import" "isNull" "map" "removeAttrs" "toString")
-         symbol-end)
+  `(,(regexp-opt '("else" "if" "import" "in" "inherit" "let" "or" "rec" "then" "with") 'symbols)
+
+    ;; Builtins
+    (,(rx symbol-start
+          (zero-or-one "builtins.")
+          (or
+           "add" "all" "any" "attrNames" "attrValues" "baseNameOf"
+           "compareVersions" "concatLists" "currentSystem" "currentTime"
+           "deepSeq" "derivation" "dirOf" "div" "elem" "elemAt" "fetchurl"
+           "filter" "filterSource" "foldl’" "fromJSON" "functionArgs" "genList"
+           "getAttr" "getEnv" "hasAttr" "hashString" "head" "intersectAttrs"
+           "isAttrs" "isBool" "isFunction" "isInt" "isList" "isNull" "isString"
+           "langVersion" "length" "lessThan" "listToAttrs" "map" "match" "mul"
+           "nixVersion" "parseDrvName" "pathExists" "readDir" "readFile"
+           "removeAttrs" "replaceStrings" "scopedImport" "seq" "sort" "storeDir"
+           "storePath" "stringLength" "sub" "substring" "tail" "toFile" "toJSON"
+           "toPath" "toString" "toXML" "trace" "typeOf"
+           )
+          symbol-end) . font-lock-builtin-face)
+    (,(regexp-opt '("builtins") 'symbols) . font-lock-builtin-face)
 
     (,(regexp-opt '("assert" "abort" "throw") 'symbols) . font-lock-warning-face)
 
