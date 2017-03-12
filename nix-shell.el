@@ -101,7 +101,9 @@ The topmost match has precedence."
 
 ;;;###autoload
 (defun nix-shell-register (directory &rest args)
-  "Get the environment variables from a nix-shell from DIRECTORY."
+  "Get the environment variables from a nix-shell from DIRECTORY.
+
+ARGS are passed to nix-shell executable to generate the nix shell environment."
   (interactive "Dregister nix-shell: ")
   (or (gethash directory nix-shell-variables-cache)
       (puthash directory (nix-with-default-directory directory
@@ -140,8 +142,8 @@ The topmost match has precedence."
   (nix-with-gensyms (shell-root shell-vars)
     `(if-let ((,shell-root (nix-shell-root ,directory))
               (,shell-vars (nix-shell-variables (file-truename ,shell-root))))
-         (let* ((exec-path (nix-shell-exec-path ,shell-vars))
-                (process-environment (nix-shell-process-environment ,shell-vars)))
+         (let ((exec-path (nix-shell-exec-path ,shell-vars))
+               (process-environment (nix-shell-process-environment ,shell-vars)))
            ,@body)
        (user-error "Not inside a nix-shell project: %s" ,directory))))
 
