@@ -71,6 +71,8 @@
 (defvar nix-options-show-buffer-name "*NixOS option*")
 (defvar nix-options-process-environment '("LC_ALL=C" "NIXPKGS_ALLOW_UNFREE=1")
   "Prepended to `process-environment' while running nix-build.")
+(defvar nix-options-local-file (locate-user-emacs-file ".nix-options.json")
+  "Path where will be downloaded the nix options file from the NixOS homepage.")
 
 (defvar nix-options (make-hash-table :test 'equal))
 
@@ -109,9 +111,8 @@
 
 (defun nix-options-http-fetch ()
   "Fetch nix options from NixOS homepage."
-  (let ((file-name (locate-user-emacs-file "nix-options.json")))
-    (url-copy-file nix-options-json-url file-name 'ok-if-already-exists)
-    file-name))
+  (or (file-readable-p nix-options-local-file) (url-copy-file nix-options-json-url nix-options-local-file))
+  nix-options-local-file)
 
 (defun nix-options-file (&optional from-homepage)
   "Get nix-options-file or generate one.
@@ -121,10 +122,12 @@ the official website."
   (unless (and nix-options-file (file-readable-p nix-options-file))
     (message "Generating nix-options file... ")
     (let ((file (if from-homepage
-                    ;; TODO: if this fails to generate nix-options offer to use
-                    ;;       nix-options from the homepage
                     (nix-options-http-fetch)
-                  (nix-options-generate-json-options))))
+                  (condition-case err
+                      (nix-options-generate-json-options)
+                    (error (if (y-or-n-p (format "Building nix options failed: %S.  Do you to use nix options from NixOS homepage? " (error-message-string err)))
+                               (nix-options-http-fetch)
+                             (signal (car err) (cdr err))))))))
       (if (yes-or-no-p "Save the `nix-options-file' for future sessions? ")
           (customize-save-variable 'nix-options-file file)
         (customize-set-variable 'nix-options-file file))))
