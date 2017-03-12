@@ -31,8 +31,7 @@
 ;;
 ;; TODO:
 ;;
-;; + [ ] Multiline strings
-;; + [ ] Indentation with `smie'. See: https://github.com/NixOS/nix/blob/master/doc/manual/nix-lang-ref.xml
+;; + [ ] Indentation with `smie'.  See: https://github.com/NixOS/nix/blob/master/doc/manual/nix-lang-ref.xml
 ;;
 ;; [Nix]: https://nixos.org/nix/
 
@@ -120,6 +119,57 @@
     ("<=" . ?≤))
   "Alist of symbol prettifications for Nix.")
 
+(defconst nix-syntax-propertize-function
+  (syntax-propertize-rules
+   ((rx (group "''"))
+    (0 (ignore (nix-syntax-stringify))))))
+
+;;; Shamelessly stolen from `python.el'.
+(defsubst nix-syntax-count-quotes (quote-char &optional point limit)
+  "Count number of quotes around point (max is 2).
+QUOTE-CHAR is the quote char to count.  Optional argument POINT is
+the point where scan starts (defaults to current point), and LIMIT
+is used to limit the scan."
+  (let ((i 0))
+    (while (and (< i 2)
+                (or (not limit) (< (+ point i) limit))
+                (eq (char-after (+ point i)) quote-char))
+      (setq i (1+ i)))
+    i))
+
+(defun nix-syntax-stringify ()
+  "Put `syntax-table' property correctly on single/double quotes."
+  (let* ((num-quotes (length (match-string-no-properties 1)))
+         (ppss (prog2
+                   (backward-char num-quotes)
+                   (syntax-ppss)
+                 (forward-char num-quotes)))
+         (string-start (and (not (nth 4 ppss)) (nth 8 ppss)))
+         (quote-starting-pos (- (point) num-quotes))
+         (quote-ending-pos (point))
+         (num-closing-quotes
+          (and string-start
+               (nix-syntax-count-quotes
+                (char-before) string-start quote-starting-pos))))
+    (cond ((and string-start (= num-closing-quotes 0))
+           ;; This set of quotes doesn't match the string starting
+           ;; kind. Do nothing.
+           nil)
+          ((not string-start)
+           ;; This set of quotes delimit the start of a string.
+           (put-text-property quote-starting-pos (1+ quote-starting-pos)
+                              'syntax-table (string-to-syntax "|")))
+          ((= num-quotes num-closing-quotes)
+           ;; This set of quotes delimit the end of a string.
+           (put-text-property (1- quote-ending-pos) quote-ending-pos
+                              'syntax-table (string-to-syntax "|")))
+          ((> num-quotes num-closing-quotes)
+           ;; This may only happen whenever a triple quote is closing
+           ;; a single quoted string. Add string delimiter syntax to
+           ;; all three quotes.
+           (put-text-property quote-starting-pos quote-ending-pos
+                              'syntax-table (string-to-syntax "|"))))))
+
 ;; FIXME: replace this with smie support
 (defun nix-indent-line ()
   "Indent current line in a Nix expression."
@@ -136,6 +186,7 @@
   (setq-local comment-start-skip "#+\\s-*")
   (setq-local parse-sexp-lookup-properties t)
   (setq-local prettify-symbols-alist nix--prettify-symbols-alist)
+  (setq-local syntax-propertize-function nix-syntax-propertize-function)
   (setq-local indent-line-function 'nix-indent-line))
 
 ;;;###autoload

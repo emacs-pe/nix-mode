@@ -9,8 +9,7 @@ A major mode for [Nix][] expressions.
 
 ### TODO
 
-+ [ ] Multiline strings
-+ [ ] Indentation with `smie`. See: https://github.com/NixOS/nix/blob/master/doc/manual/nix-lang-ref.xml
++ [ ] Indentation with `smie`.  See: https://github.com/NixOS/nix/blob/master/doc/manual/nix-lang-ref.xml
 
 [Nix]: https://nixos.org/nix/
 
