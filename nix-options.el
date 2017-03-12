@@ -224,7 +224,7 @@ Used for show information about a nix option."
   (string-join (list
                 (format "%s\n%s"
                         (propertize "NAME" 'face 'nix-options-value)
-                        (nix-options-indent (nix-options-option-name option)))
+                        (nix-options-indent (propertize (nix-options-option-name option) 'face 'font-lock-variable-name-face)))
                 (format "%s\n%s"
                         (propertize "DESCRIPTION" 'face 'nix-options-value)
                         (nix-options-indent (nix-options-option-description option)))

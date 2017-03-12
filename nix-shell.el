@@ -72,12 +72,6 @@ The topmost match has precedence."
   "A structure holding the information of nix-shell."
   exec-path process-environment)
 
-(defun nix-shell-invalidate-cache (&optional directory)
-  "Invalidate nix-shell variables cache for DIRECTORY."
-  (if directory
-      (remhash directory nix-shell-variables-cache)
-    (clrhash nix-shell-variables-cache)))
-
 (defun nix-shell-locate-root-directory (directory)
   "Locate a project root DIRECTORY for a nix directory."
   (cl-loop for file in nix-shell-files
@@ -96,9 +90,17 @@ The topmost match has precedence."
            finally return exec-path))
 
 ;;;###autoload
-(defalias 'nix-shell-register #'nix-shell-variables)
+(defun nix-shell-invalidate-cache (&optional directory)
+  "Invalidate nix-shell variables cache for DIRECTORY."
+  (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
+  (if directory
+      (remhash directory nix-shell-variables-cache)
+    (clrhash nix-shell-variables-cache)))
+
+(defalias 'nix-shell-variables #'nix-shell-register)
+
 ;;;###autoload
-(defun nix-shell-variables (directory &rest args)
+(defun nix-shell-register (directory &rest args)
   "Get the environment variables from a nix-shell from DIRECTORY."
   (interactive "Dregister nix-shell: ")
   (or (gethash directory nix-shell-variables-cache)
