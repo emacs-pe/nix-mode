@@ -182,34 +182,6 @@ If FROM-HOMEPAGE is non nil will download options file from nixos.org."
                          declarations)
                  "\n")))
 
-;; Shamelessly stolen from `ansible-doc'.
-(defun nix-options-fontify (text)
-  "Add `font-lock-face' properties to nix mode.
-
-Return a fontified copy of TEXT."
-  ;; Graciously inspired by http://emacs.stackexchange.com/a/5408/227
-  (if (not (fboundp 'nix-mode))
-      text
-    (with-temp-buffer
-      (insert text)
-      (delay-mode-hooks
-        (nix-mode)
-        (font-lock-mode))
-      (if (fboundp 'font-lock-ensure)
-          (font-lock-ensure)
-        (with-no-warnings
-          ;; Suppress warning about non-interactive use of
-          ;; `font-lock-fontify-buffer' in Emacs 25.
-          (font-lock-fontify-buffer)))
-      ;; Convert `face' to `font-lock-face' to play nicely with font lock
-      (goto-char (point-min))
-      (while (not (eobp))
-        (let ((pos (point)))
-          (goto-char (next-single-property-change pos 'face nil (point-max)))
-          (put-text-property pos (point) 'font-lock-face
-                             (get-text-property pos 'face))))
-      (buffer-string))))
-
 (defun nix-options-decl-action (button)
   "Find file for declaration BUTTON."
   (interactive)

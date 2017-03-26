@@ -68,5 +68,33 @@
   "Execute PROGRAM with ARGS, returning t if its exit code is 0."
   (= (apply #'nix-exec-exit-code program args) 0))
 
+;; Shamelessly stolen from `ansible-doc'.
+(defun nix-fontify-text (text &optional mode)
+  "Add `font-lock-face' properties to TEXT using MODE.
+
+Return a fontified copy of TEXT."
+  ;; Graciously inspired by http://emacs.stackexchange.com/a/5408/227
+  (if (not (fboundp mode))
+      text
+    (with-temp-buffer
+      (insert text)
+      (delay-mode-hooks
+        (funcall mode)
+        (font-lock-mode))
+      (if (fboundp 'font-lock-ensure)
+          (font-lock-ensure)
+        (with-no-warnings
+          ;; Suppress warning about non-interactive use of
+          ;; `font-lock-fontify-buffer' in Emacs 25.
+          (font-lock-fontify-buffer)))
+      ;; Convert `face' to `font-lock-face' to play nicely with font lock
+      (goto-char (point-min))
+      (while (not (eobp))
+        (let ((pos (point)))
+          (goto-char (next-single-property-change pos 'face nil (point-max)))
+          (put-text-property pos (point) 'font-lock-face
+                             (get-text-property pos 'face))))
+      (buffer-string))))
+
 (provide 'nix-common)
 ;;; nix-common.el ends here
