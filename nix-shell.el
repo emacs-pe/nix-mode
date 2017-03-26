@@ -31,7 +31,9 @@
 ;; + [ ] Document integration with FlyCheck and related tools
 
 ;;; Code:
-(eval-when-compile (require 'cl-lib))
+(eval-when-compile
+  (require 'cl-lib)
+  (require 'subr-x))
 (require 'nix-common)
 
 (defgroup nix-shell nil
@@ -117,7 +119,7 @@ ARGS are passed to nix-shell executable to generate the nix shell environment."
 (defun nix-shell-active (directory)
   "Activate the nix-shell in DIRECTORY."
   (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
-  (if-let ((shell-vars (nix-shell-variables (file-truename directory))))
+  (if-let (shell-vars (nix-shell-variables (file-truename directory)))
       (setq nix-shell-old-exec-path exec-path
             nix-shell-old-process-environment process-environment
             exec-path (nix-shell-exec-path shell-vars)
