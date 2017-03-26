@@ -26,7 +26,7 @@
 
 ;;; Commentary:
 
-;; See: https://nixos.org/nixos/options.html
+;; See: <URL:https://nixos.org/nixos/options.html>.
 
 ;;; Code:
 (eval-when-compile
@@ -96,12 +96,18 @@
                         :name (symbol-name (car item))
                         :default .default
                         :declarations .declarations
-                        :description .description
+                        :description (string-trim .description)
                         :example .example
                         :readOnly .readOnly
                         :type .type)
                        nix-options)))
           json-file))
+
+;; TODO: Replace `json-encode' with something like nix "builtins.fromJSON"
+(defun nix-options-json-encode (object &optional pretty)
+  "Return a JSON representation of OBJECT as a string, prettified if PRETTY is non-nil."
+  (let ((json-encoding-pretty-print pretty))
+    (json-encode object)))
 
 (defun nix-options-generate-json-options ()
   "Generate json options."
@@ -117,10 +123,10 @@
 (defun nix-options-file (&optional from-homepage)
   "Get nix-options-file or generate one.
 
-If FROM-HOMEPAGE is non nil, will download the json options from
+If FROM-HOMEPAGE is non-nil, will download the json options from
 the official website."
   (unless (and nix-options-file (file-readable-p nix-options-file))
-    (message "Generating nix-options file... ")
+    (message "Generating NixOS options file... ")
     (let ((file (if from-homepage
                     (nix-options-http-fetch)
                   (condition-case err
@@ -133,42 +139,36 @@ the official website."
         (customize-set-variable 'nix-options-file file))))
   nix-options-file)
 
-(defun nix-options (&optional from-homepage)
-  "Populate `nix-options'.
+(defun nix-options (&optional force from-homepage)
+  "Return the `nix-options' hash-table, populate it if necessary.
 
-If FROM-HOMEPAGE is non nil will download options file from nixos.org."
-  (unless nix-options-loaded-p
+If FORCE is non-nil will reload `nix-options'.  If FROM-HOMEPAGE
+is non-nil will download options file from nixos.org."
+  (when (or force (not nix-options-loaded-p))
     (message "loading NixOS options...")
+    (nix-options-collect (json-read-file (nix-options-file (or from-homepage nix-options-from-homepage-p))))
     (setq nix-options-loaded-p t)
-    (nix-options-collect (json-read-file (nix-options-file (or from-homepage nix-options-from-homepage-p)))))
+    (message "Loaded NixOS options"))
   nix-options)
 
 (defun nix-options-locate-declaration (file-name)
   "Locate a nix declaration for nix FILE-NAME."
   (nix-exec-string "nix-instantiate" "--find-file" (concat "nixpkgs/" file-name)))
 
-(defun nix-options-display-default (option)
-  "Return a display string for an nix OPTION default."
-  (let ((default (nix-options-option-default option)))
-    (if (null default)
-        (propertize nix-options-empty-string 'face 'nix-options-not-given)
-      (nix-options-fontify (json-encode default)))))
+(defun nix-options-display-default (option &optional pretty)
+  "Return a string for an nix OPTION default, prettified if PRETTY is non-nil."
+  (if-let (default (nix-options-option-default option))
+      (nix-fontify-text (nix-options-json-encode default pretty) 'nix-mode)
+    (propertize nix-options-empty-string 'face 'nix-options-not-given)))
 
-;; TODO: Replace `json-encode' with something like nix "builtins.fromJSON"
-(defun nix-options-display-example (option)
-  "Return a display string for a nix OPTION example."
-  (let ((example (nix-options-option-example option)))
-    (if (null example)
-        (propertize nix-options-empty-string 'face 'nix-options-not-given)
-      (nix-options-fontify
-       (if (listp example)
-           (if (assq '_type example)
-               (let-alist example
-                 (if (stringp .text)
-                     .text
-                   (json-encode .text)))
-             (json-encode example))
-         (json-encode example))))))
+(defun nix-options-display-example (option &optional pretty)
+  "Return a string for a nix OPTION example, prettified if PRETTY is non-nil."
+  (if-let (example (nix-options-option-example option))
+      (nix-fontify-text (if (and (listp example) (stringp (cdr (assq 'text example))))
+                            (cdr (assq 'text example)) ; XXX: it is a literal example.
+                          (nix-options-json-encode example pretty))
+                        'nix-mode)
+    (propertize nix-options-empty-string 'face 'nix-options-not-given)))
 
 (defun nix-options-display-declarations (option)
   "Return a display string fo a nix OPTION declaration."
@@ -185,13 +185,13 @@ If FROM-HOMEPAGE is non nil will download options file from nixos.org."
 (defun nix-options-decl-action (button)
   "Find file for declaration BUTTON."
   (interactive)
-  (let ((declaration (button-get button 'declaration)))
-    (find-file (nix-options-locate-declaration declaration))))
+  (find-file (nix-options-locate-declaration (button-get button 'declaration))))
 
 (defun nix-options-indent (string &optional length)
   "Indent STRING to LENGTH from line start."
   (replace-regexp-in-string "^" (make-string (or length nix-options-indent-default) 32) string))
 
+;; TODO: replace <literal> and <option> tags.
 (defun nix-options-option-string (option)
   "Return an option string from OPTION.
 
@@ -208,10 +208,10 @@ Used for show information about a nix option."
                         (nix-options-indent (nix-options-option-type option)))
                 (format "%s\n%s"
                         (propertize "DEFAULT" 'face 'nix-options-value)
-                        (nix-options-indent (nix-options-display-default option)))
+                        (nix-options-indent (nix-options-display-default option 'pretty)))
                 (format "%s\n%s"
                         (propertize "EXAMPLE" 'face 'nix-options-value)
-                        (nix-options-indent (nix-options-display-example option)))
+                        (nix-options-indent (nix-options-display-example option 'pretty)))
                 (format "%s\n%s"
                         (propertize "DECLARATIONS" 'face 'nix-options-value)
                         (nix-options-indent (nix-options-display-declarations option))))
@@ -220,29 +220,23 @@ Used for show information about a nix option."
 ;;;###autoload
 (defun nix-options-show (name)
   "Show information about nix option NAME."
-  (interactive (list (completing-read "Option: "
-                                      (hash-table-keys (nix-options))
-                                      nil 'require-match nil 'nix-options-show-history
-                                      (thing-at-point 'symbol))))
+  (interactive (list (completing-read "Option: " (nix-options) nil 'require-match nil 'nix-options-show-history (thing-at-point 'symbol 'no-properties))))
   (if-let (option (gethash name (nix-options)))
       (with-help-window (get-buffer-create nix-options-show-buffer-name)
         (with-current-buffer standard-output
-          (let ((json-encoding-pretty-print t))
-            (insert (nix-options-option-string option)))))
-    (user-error "Not nix option %s found" name)))
+          (insert (nix-options-option-string option))))
+    (user-error "NixOS option %s not found" name)))
 
 ;;;###autoload
 (defun nix-options-load (&optional force from-homepage)
   "Populate `nix-options' variable from a json file.
 
-If FORCE is non nil re-reads from file.  If FROM-HOMEPAGE is
-non-nil will try to download the options json from NixOS
-homepage."
-  (interactive (list (if nix-options-loaded-p (y-or-n-p "Reload nix options? ") 'force)
-                     (and current-prefix-arg (y-or-n-p "Use nix options from homepage? "))))
-  (and force (setq nix-options-loaded-p nil))
-  (nix-options from-homepage)
-  (and force (called-interactively-p 'any) (message "Loaded NixOS options")))
+If FORCE is non-nil will reload `nix-options' hash-table from
+`nix-options-file'.  If FROM-HOMEPAGE is non-nil will try to
+download the options json from NixOS homepage."
+  (interactive (list (if nix-options-loaded-p (y-or-n-p "NixOS options is already loaded.  Reload it? ") 'force)
+                     (and current-prefix-arg (y-or-n-p "Use NixOS options from homepage? "))))
+  (nix-options force from-homepage))
 
 (provide 'nix-options)
 ;;; nix-options.el ends here
