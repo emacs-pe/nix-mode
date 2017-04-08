@@ -54,6 +54,14 @@
                  symbols)
      ,@body))
 
+(defsubst nix-as-symbol (string-or-symbol)
+  "If STRING-OR-SYMBOL is already a symbol, return it.  Otherwise convert it to a symbol and return that."
+  (if (symbolp string-or-symbol) string-or-symbol (intern string-or-symbol)))
+
+(defsubst nix-as-string (string-or-symbol)
+  "If STRING-OR-SYMBOL is already a string, return it.  Otherwise convert it to a string and return that."
+  (if (stringp string-or-symbol) string-or-symbol (symbol-name string-or-symbol)))
+
 (defun nix-exec-insert (program &rest args)
   "Execute PROGRAM with ARGS, inserting its output at point."
   (apply #'process-file program nil (list t nil) nil args))

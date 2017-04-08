@@ -91,9 +91,9 @@
   "Collect nix candidates from the JSON-FILE."
   (seq-do (lambda (item)
             (let-alist (cdr item)
-              (puthash (symbol-name (car item))
+              (puthash (nix-as-string (car item))
                        (nixos-option-option-new
-                        :name (symbol-name (car item))
+                        :name (nix-as-string (car item))
                         :default .default
                         :declarations .declarations
                         :description (string-trim .description)
