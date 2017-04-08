@@ -1,4 +1,4 @@
-;;; company-nix.el --- Company backend for nix expressions -*- lexical-binding: t -*-
+;;; company-nixos-option.el --- Company backend for NixOS options -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2017 Mario Rodas <marsam@users.noreply.github.com>
 
@@ -32,10 +32,10 @@
 ;;
 ;; Add to your `init.el':
 ;;
-;;     (require 'company-nix)
+;;     (require 'company-nixos-option)
 ;;
 ;;     (with-eval-after-load 'company
-;;       (add-to-list 'company-backends 'company-nix))
+;;       (add-to-list 'company-backends 'company-nixos-option))
 ;;
 ;; TODO:
 ;;
@@ -46,64 +46,64 @@
 ;;; Code:
 (eval-when-compile (require 'cl-lib))
 (require 'company)
-(require 'nix-options)
+(require 'nixos-option)
 
-(defvar company-nix-candidates nil)
-(defvar company-nix-candidates-loaded-p nil)
+(defvar company-nixos-option-candidates nil)
+(defvar company-nixos-option-candidates-loaded-p nil)
 
-(defun company-nix-collect-candidates ()
+(defun company-nixos-option-collect-candidates ()
   "Collect nix candidates from the `nix-options' hash table."
-  (or company-nix-candidates-loaded-p
-      (setq company-nix-candidates (hash-table-keys (nix-options))
-            company-nix-candidates-loaded-p t)))
+  (or company-nixos-option-candidates-loaded-p
+      (setq company-nixos-option-candidates (hash-table-keys (nixos-option-options))
+            company-nixos-option-candidates-loaded-p t)))
 
-(defun company-nix-prefix ()
+(defun company-nixos-option-prefix ()
   "Get a company prefix from current position."
   (and (or (looking-at "\\_>") (eq (char-before) ?.))
        (buffer-substring (point) (save-excursion (skip-syntax-backward "w_.") (point)))))
 
-(defun company-nix-candidates (prefix)
+(defun company-nixos-option-candidates (prefix)
   "Return company candidates from PREFIX."
-  (company-nix-collect-candidates)
-  (all-completions prefix company-nix-candidates))
+  (company-nixos-option-collect-candidates)
+  (all-completions prefix company-nixos-option-candidates))
 
-(defun company-nix-doc-buffer (candidate)
+(defun company-nixos-option-doc-buffer (candidate)
   "Return a company documentation buffer for CANDIDATE."
-  (company-doc-buffer (nix-options-option-string (gethash candidate nix-options))))
+  (company-doc-buffer (nixos-option-tostring (gethash candidate nixos-option-options))))
 
-(defun company-nix-annotation (candidate)
+(defun company-nixos-option-annotation (candidate)
   "Return a company annotation for CANDIDATE."
-  (format "[%s]" (nix-options-option-type (gethash candidate nix-options))))
+  (format "[%s]" (nixos-option-type (gethash candidate nixos-option-options))))
 
-(defun company-nix-location (candidate)
+(defun company-nixos-option-location (candidate)
   "Return a company location for CANDIDATE."
-  (let ((declarations (nix-options-option-declarations (gethash candidate nix-options))))
-    (cons (nix-options-locate-declaration (elt declarations 0)) 1)))
+  (let ((declarations (nixos-option-declarations (gethash candidate nixos-option-options))))
+    (cons (nixos-option-locate-declaration (elt declarations 0)) 1)))
 
-(defun company-nix-meta (candidate)
+(defun company-nixos-option-meta (candidate)
   "Return a company meta string for CANDIDATE."
-  (let ((nix-option (gethash candidate nix-options)))
+  (let ((nix-option (gethash candidate nixos-option-options)))
     (format "%s: %s | %s: %s"
             (propertize "default" 'face 'nix-options-value)
-            (nix-options-display-default nix-option)
+            (nixos-option-display-default nix-option)
             (propertize "example" 'face 'nix-options-value)
-            (nix-options-display-example nix-option))))
+            (nixos-option-display-example nix-option))))
 
 ;;;###autoload
-(defun company-nix (command &optional arg &rest ignored)
+(defun company-nixos-option (command &optional arg &rest ignored)
   "`company-mode' completion back-end for nix expressions.
 Provide completion info according to COMMAND and ARG.  IGNORED, not used."
   (interactive (list 'interactive))
   (cl-case command
-    (interactive (company-begin-backend 'company-nix))
+    (interactive (company-begin-backend 'company-nixos-option))
     (prefix (and (derived-mode-p 'nix-mode)
                  (not (company-in-string-or-comment))
-                 (or (company-nix-prefix) 'stop)))
-    (candidates (company-nix-candidates arg))
-    (annotation (company-nix-annotation arg))
-    (doc-buffer (company-nix-doc-buffer arg))
-    (location (company-nix-location arg))
-    (meta (company-nix-meta arg))))
+                 (or (company-nixos-option-prefix) 'stop)))
+    (candidates (company-nixos-option-candidates arg))
+    (annotation (company-nixos-option-annotation arg))
+    (doc-buffer (company-nixos-option-doc-buffer arg))
+    (location (company-nixos-option-location arg))
+    (meta (company-nixos-option-meta arg))))
 
-(provide 'company-nix)
-;;; company-nix.el ends here
+(provide 'company-nixos-option)
+;;; company-nixos-option.el ends here
