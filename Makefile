@@ -21,6 +21,9 @@ compile: $(OBJS)
 clean:
 	$(CASK) clean-elc
 
+test: clean
+	$(CASK) exec $(EMACSBATCH) -L . -l nix-mode-test.el -f ert-run-tests-batch-and-exit
+
 %.elc: %.el $(PKGDIR)
 	$(CASK) exec $(EMACSBATCH) -f batch-byte-compile $<
 

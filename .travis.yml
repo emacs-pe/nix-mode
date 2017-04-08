@@ -11,5 +11,7 @@ before_install:
   - curl -SOL https://github.com/flycheck/emacs-travis/raw/master/emacs-travis.mk
   - make -f emacs-travis.mk install_emacs
   - make -f emacs-travis.mk install_cask
-script:
+install:
   - make compile
+script:
+  - make test

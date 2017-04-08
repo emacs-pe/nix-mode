@@ -26,6 +26,18 @@
 ;;; Commentary:
 
 ;;; Code:
+;; Shamelessly stolen from: https://github.com/alezost/guix.el/blob/e1dfd96/elisp/guix-prettify.el
+(defvar nix-prettify-regexp
+  (rx "/" (or "store" "log" (and "nar" (zero-or-one "/gzip")))
+      ;; Hash-parts do not include "e", "o", "u" and "t".  See base32Chars
+      ;; at <https://github.com/NixOS/nix/blob/f8b84a3/src/libutil/hash.cc>
+      "/" (group (= 32 (any "0-9" "a-d" "f-n" "p-s" "v-z"))))
+  "Regexp matching file names for prettifying.")
+
+(defun nix-prettify (file-name)
+  "Prettify nix store FILE-NAME."
+  (replace-regexp-in-string nix-prettify-regexp "…" file-name nil nil 1))
+
 (defmacro nix-with-default-directory (directory &rest body)
   "Set `default-directory' to DIRECTORY and execute BODY."
   (declare (indent defun) (debug t))
