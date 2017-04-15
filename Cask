@@ -13,7 +13,6 @@
  )
 
 (depends-on "company")
-(depends-on "flycheck")
 
 (development
  (depends-on "ert")
