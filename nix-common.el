@@ -116,5 +116,24 @@ Return a fontified copy of TEXT."
                              (get-text-property pos 'face))))
       (buffer-string))))
 
+(defun nix-regexp-match (regexp string &optional start)
+  "When the given expression matches the string, this function returns a list
+of the whole matching string and a string for each matched subexpressions.
+If it did not match the returned value is an empty list (nil).
+
+When START is non-nil the search will start at that index."
+  (save-match-data
+    (if (string-match regexp string start)
+        (let ((match-data-list (match-data))
+              result)
+          (while match-data-list
+            (let* ((beg (car match-data-list))
+                   (end (cadr match-data-list))
+                   (subs (if (and beg end) (substring string beg end) nil)))
+              (setq result (cons subs result))
+              (setq match-data-list
+                    (cddr match-data-list))))
+          (nreverse result)))))
+
 (provide 'nix-common)
 ;;; nix-common.el ends here
