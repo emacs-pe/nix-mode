@@ -12,6 +12,7 @@
  "nix-common.el"
  )
 
+(depends-on "tablist")
 (depends-on "company")
 
 (development

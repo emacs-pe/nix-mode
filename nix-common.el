@@ -88,6 +88,17 @@
   "Execute PROGRAM with ARGS, returning t if its exit code is 0."
   (= (apply #'nix-exec-exit-code program args) 0))
 
+(defun nix-exec (program &rest args)
+  "Execute PROGRAM with ARGS in a compilation buffer."
+  (compilation-start (mapconcat #'shell-quote-argument (cons program args) " ")))
+
+(defsubst nix-goto-line (n)
+  "Go to line N."
+  (save-restriction
+    (widen)
+    (goto-char (point-min))
+    (forward-line (1- n))))
+
 ;; Shamelessly stolen from `ansible-doc'.
 (defun nix-fontify-text (text &optional mode)
   "Add `font-lock-face' properties to TEXT using MODE.
