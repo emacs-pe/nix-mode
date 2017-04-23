@@ -5,8 +5,6 @@
 
 A major mode for [Nix][] expressions.
 
-![screenshot](https://github.com/emacs-pe/nix-mode/raw/master/assets/screenshot.png)
-
 ### TODO
 
 + [ ] Indentation with `smie`.  See: https://github.com/NixOS/nix/blob/master/doc/manual/nix-lang-ref.xml
