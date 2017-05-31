@@ -35,7 +35,7 @@
   (require 'let-alist))
 
 (require 'json)
-(require 'nix-common)
+(require 'nix)
 
 (defgroup nix-option nil
   "Interface for NixOS options."

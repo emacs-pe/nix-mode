@@ -31,7 +31,7 @@
 (and (require 'undercover nil 'no-error) (undercover "nix-mode.el"))
 
 (require 'nix-mode)
-(require 'nix-common)
+(require 'nix)
 
 (ert-deftest nix-mode-test-prettify ()
   "Test prettify regexp."

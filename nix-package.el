@@ -36,7 +36,7 @@
 
 (require 'json)
 (require 'tablist)
-(require 'nix-common)
+(require 'nix)
 
 (defgroup nix-package nil
   "Interface for NixOS options."
@@ -101,6 +101,12 @@
                                 :position .meta.position
                                 :description .meta.description)
                nix-package-packages))))
+
+(defun nix-package-reload ()
+  "Reload package from FILE-NAME."
+  (and (file-exists-p nix-package-file) (delete-file nix-package-file))
+  (setq nix-package-loaded-p nil
+        nix-package-packages (make-hash-table :test 'equal)))
 
 (defun nix-package-generate-json (file-name &optional force)
   "Generate json from available packages and save to FILE-NAME.
@@ -177,43 +183,51 @@ FROM-HOMEPAGE is non-nil will download options file from
   'action #'nix-package-button-browse-url
   'help-echo "mouse-2, RET: goto homepage")
 
-(defun nix-package-entry-name (package)
-  "Return the PACKAGE."
+(defun nix-package-entry-name (attr package)
+  "Return the ATTR for PACKAGE."
   (if-let (declaration (nix-package-position package))
-      (make-text-button (nix-package-name package) nil
+      (make-text-button (if (string-equal (nix-package-name package) "hook")
+                            (format "%s (%s)" (nix-package-name package) attr)
+                          (nix-package-name package))
+                        nil
                         'type 'nix-package-declaration
                         'target declaration)
     (nix-package-name package)))
 
-(defun nix-package-entry-homepage (package)
-  "Return an tabulated-list entry representation for PACKAGE homepage."
+(defun nix-package-entry-homepage (_attr package)
+  "Return an tabulated-list entry representation for ATTR and PACKAGE homepage."
   (if-let (homepage (nix-package-homepage package))
-      (cl-labels ((link-button (url)
-                               (make-text-button url nil 'type 'nix-package-browse-url 'target url)))
+      (cl-labels ((link-button (url) (make-text-button url nil 'type 'nix-package-browse-url 'target url)))
         (cl-typecase homepage
           (vectorp (string-join (mapcar #'link-button homepage) ","))
           (stringp (link-button homepage))))
     ""))
 
-(defun nix-package-entry-description (package)
-  "Return an tabulated-list entry representation for PACKAGE description."
+(defun nix-package-entry-description (_attr package)
+  "Return an tabulated-list entry representation for ATTR and PACKAGE description."
   (if-let (description (nix-package-description package)) (nix-package-truncate-string description) ""))
 
-(defun nix-package-entry (package)
-  "Return a tabulated list entry for a nix PACKAGE struct."
-  (vector (nix-package-entry-name package)
-          (nix-package-entry-description package)
-          (nix-package-entry-homepage package)))
+(defun nix-package-entry (attr package)
+  "Return a tabulated list entry for ATTR a nix PACKAGE struct."
+  (vector (nix-package-entry-name attr package)
+          (nix-package-entry-description attr package)
+          (nix-package-entry-homepage attr package)))
 
 (defun nix-package-list-entries ()
   "Return a list of entries for `nix-package-list' tabulated mode."
-  (cl-loop for key being the hash-keys of (nix-package-packages)
-           using (hash-value value)
-           collect (list key (nix-package-entry value))))
+  (cl-loop for attr being the hash-keys of (nix-package-packages)
+           using (hash-value package)
+           collect (list attr (nix-package-entry attr package))))
 
-(defvar nix-package-list-mode-map
+(defun nix-package-do-revert ()
+  (interactive)
+  (nix-package-reload)
+  (and (derived-mode-p 'nix-package-list-mode) (tabulated-list-revert)))
+
+(defconst nix-package-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
+    (define-key map "R" 'nix-package-do-revert)
     (define-key map "i" 'nix-package-do-install)
     map)
   "Local keymap for `nix-package-list-mode' buffers.")
@@ -235,20 +249,27 @@ FROM-HOMEPAGE is non-nil will download options file from
   "Return a `nix-package' struct for a nix PKGNAME."
   (cl-assert (not (string-blank-p pkgname)) nil "Package name must not be a empty string")
   (if-let (out (nix-exec-string nix-package-nix-env-executable "--query" "--available" "--json" "-A" pkgname))
-      (assq (nix-as-symbol pkgname) (json-read-from-string out))
+      (cdr (assq (nix-as-symbol pkgname) (json-read-from-string out)))
     (user-error "Package %s not found" pkgname)))
 
 (defun nix-package-do-install (&optional arg)
   "Install ARG entries."
   (interactive "P")
-  (apply #'nix-exec nix-package-nix-env-executable (cl-loop for (attr . entry) in (tablist-get-marked-items arg)
-                                                            collect "-iA"
-                                                            collect attr)))
+  (apply #'nix-exec nix-package-nix-env-executable (mapcan (lambda (item) (list "-iA" item)) (mapcar #'car (tablist-get-marked-items arg)))))
 
 (defun nix-package-install (pkgname)
   "Install nix PKGNAME."
   (interactive (list (completing-read "Package attr: " nix-package-packages)))
   (nix-exec nix-package-nix-env-executable "-iA" pkgname))
+
+(defun nix-package-show (pkgname)
+  "Display information about nix PKGNAME."
+  (interactive (list (completing-read "Package attr: " nix-package-packages)))
+  (let-alist (nix-package-fetch-json pkgname)
+    (with-current-buffer (get-buffer-create "*NixPkg*")
+      (insert .name)
+      (insert .description)
+      (display-buffer (current-buffer)))))
 
 ;;;###autoload
 (defun nix-package-list ()

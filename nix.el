@@ -1,4 +1,4 @@
-;;; nix-common.el --- nix common                      -*- lexical-binding: t -*-
+;;; nix.el --- Nix functionality                      -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2017 Mario Rodas <marsam@users.noreply.github.com>
 
@@ -26,6 +26,8 @@
 ;;; Commentary:
 
 ;;; Code:
+(require 'tramp)
+
 ;; Shamelessly stolen from: https://github.com/alezost/guix.el/blob/e1dfd96/elisp/guix-prettify.el
 (defvar nix-prettify-regexp
   (rx "/" (or "store" "log" (and "nar" (zero-or-one "/gzip")))
@@ -99,6 +101,30 @@
     (goto-char (point-min))
     (forward-line (1- n))))
 
+(defun nix-login-name (file)
+  "Return the name under which the user accesses the given FILE."
+  (or (and (file-remote-p file)
+           ;; tramp case: execute "whoami" via tramp
+           (let ((default-directory (file-name-directory file))
+                 process-file-side-effects)
+             (nix-exec-string "whoami")))
+      ;; normal case
+      (user-login-name)
+      ;; if user-login-name is nil, return the UID as a string
+      (number-to-string (user-uid))))
+
+(defun nix-file-relative (filename directory)
+  "Return a tramp-aware for FILENAME in DIRECTORY."
+  (if (file-remote-p directory)
+      (let ((vec (tramp-dissect-file-name directory)))
+        (tramp-make-tramp-file-name
+         (tramp-file-name-method vec)
+         (tramp-file-name-user vec)
+         (tramp-file-name-host vec)
+         filename
+         (tramp-file-name-hop vec)))
+    filename))
+
 ;; Shamelessly stolen from `ansible-doc'.
 (defun nix-fontify-text (text &optional mode)
   "Add `font-lock-face' properties to TEXT using MODE.
@@ -146,5 +172,5 @@ When START is non-nil the search will start at that index."
                     (cddr match-data-list))))
           (nreverse result)))))
 
-(provide 'nix-common)
-;;; nix-common.el ends here
+(provide 'nix)
+;;; nix.el ends here
