@@ -117,12 +117,23 @@
   "Return a tramp-aware for FILENAME in DIRECTORY."
   (if (file-remote-p directory)
       (let ((vec (tramp-dissect-file-name directory)))
-        (tramp-make-tramp-file-name
-         (tramp-file-name-method vec)
-         (tramp-file-name-user vec)
-         (tramp-file-name-host vec)
-         filename
-         (tramp-file-name-hop vec)))
+        (condition-case nil
+            (tramp-make-tramp-file-name
+             (tramp-file-name-method vec)
+             (tramp-file-name-user vec)
+             (tramp-file-name-domain vec)
+             (tramp-file-name-host vec)
+             (tramp-file-name-port vec)
+             filename
+             (tramp-file-name-hop vec))
+          (wrong-number-of-arguments
+           (with-no-warnings
+             (tramp-make-tramp-file-name
+              (tramp-file-name-method vec)
+              (tramp-file-name-user vec)
+              (tramp-file-name-host vec)
+              filename
+              (tramp-file-name-hop vec))))))
     filename))
 
 ;; Shamelessly stolen from `ansible-doc'.
