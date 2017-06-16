@@ -48,7 +48,7 @@
   :type '(file :must-match t)
   :group 'nix-package)
 
-(defcustom nix-package-file (locate-user-emacs-file "nix-package.json")
+(defcustom nix-package-file (expand-file-name "nix-package.json" "~/.nix-defexpr/")
   "Path where will be downloaded the nix options file from the NixOS homepage."
   :type '(file :must-match t)
   :group 'nix-package)
@@ -97,16 +97,10 @@
     (let-alist item
       (puthash (nix-as-string (car item))
                (nix-package-new :name .name
-                                :homepage .meta.homepage
+                                :homepage (or .meta.homepage .meta.downloadPage)
                                 :position .meta.position
                                 :description .meta.description)
                nix-package-packages))))
-
-(defun nix-package-reload ()
-  "Reload package from FILE-NAME."
-  (and (file-exists-p nix-package-file) (delete-file nix-package-file))
-  (setq nix-package-loaded-p nil
-        nix-package-packages (make-hash-table :test 'equal)))
 
 (defun nix-package-generate-json (file-name &optional force)
   "Generate json from available packages and save to FILE-NAME.
@@ -168,12 +162,11 @@ FROM-HOMEPAGE is non-nil will download options file from
 
 (defun nix-package-button-find-file (button)
   "Open web browser on page pointed to by BUTTON."
-  (when-let (target (button-get button 'target))
-    (cl-multiple-value-bind (_match filename line)
-        (nix-regexp-match nix-package-location-regexp target)
-      (with-current-buffer (find-file-noselect filename)
-        (nix-goto-line (string-to-number line))
-        (switch-to-buffer (current-buffer))))))
+  (cl-multiple-value-bind (_match filename line)
+      (nix-regexp-match nix-package-location-regexp (button-get button 'target))
+    (with-current-buffer (find-file-noselect filename)
+      (nix-goto-line (string-to-number line))
+      (switch-to-buffer (current-buffer)))))
 
 (define-button-type 'nix-package-declaration
   'action #'nix-package-button-find-file
@@ -220,15 +213,20 @@ FROM-HOMEPAGE is non-nil will download options file from
            collect (list attr (nix-package-entry attr package))))
 
 (defun nix-package-do-revert ()
+  "Regenerate the `nix-package-file' cache."
   (interactive)
-  (nix-package-reload)
+  (and (file-exists-p nix-package-file) (delete-file nix-package-file))
+  (setq nix-package-loaded-p nil
+        nix-package-packages (make-hash-table :test 'equal))
   (and (derived-mode-p 'nix-package-list-mode) (tabulated-list-revert)))
 
 (defconst nix-package-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
+    (define-key map "S" 'nix-package-shell)
     (define-key map "R" 'nix-package-do-revert)
     (define-key map "i" 'nix-package-do-install)
+    (define-key map (kbd "RET") 'nix-package-show)
     map)
   "Local keymap for `nix-package-list-mode' buffers.")
 
@@ -245,6 +243,12 @@ FROM-HOMEPAGE is non-nil will download options file from
 
 (add-hook 'nix-package-list-mode-hook #'tablist-minor-mode)
 
+(defun nix-package-read-attribute ()
+  "Read nix package attribute."
+  (let ((attribute (and (derived-mode-p 'nix-package-list-mode) (tabulated-list-get-id))))
+    (list (or (and (not current-prefix-arg) attribute)
+              (completing-read "Package attr: " (nix-package-packages) nil t attribute)))))
+
 (defun nix-package-fetch-json (pkgname)
   "Return a `nix-package' struct for a nix PKGNAME."
   (cl-assert (not (string-blank-p pkgname)) nil "Package name must not be a empty string")
@@ -255,21 +259,45 @@ FROM-HOMEPAGE is non-nil will download options file from
 (defun nix-package-do-install (&optional arg)
   "Install ARG entries."
   (interactive "P")
-  (apply #'nix-exec nix-package-nix-env-executable (mapcan (lambda (item) (list "-iA" item)) (mapcar #'car (tablist-get-marked-items arg)))))
+  (cl-assert (tablist-get-marked-items arg) nil "You need to select a package(s) to install")
+  (apply #'nix-exec nix-package-nix-env-executable (mapcan (lambda (item) (list "-iA" (car item))) (tablist-get-marked-items arg))))
 
-(defun nix-package-install (pkgname)
-  "Install nix PKGNAME."
-  (interactive (list (completing-read "Package attr: " nix-package-packages)))
-  (nix-exec nix-package-nix-env-executable "-iA" pkgname))
+(defun nix-package-install (attribute)
+  "Install nix package ATTRIBUTE."
+  (interactive (nix-package-read-attribute))
+  (nix-exec nix-package-nix-env-executable "-iA" attribute))
 
-(defun nix-package-show (pkgname)
-  "Display information about nix PKGNAME."
-  (interactive (list (completing-read "Package attr: " nix-package-packages)))
-  (let-alist (nix-package-fetch-json pkgname)
-    (with-current-buffer (get-buffer-create "*NixPkg*")
-      (insert .name)
-      (insert .description)
-      (display-buffer (current-buffer)))))
+(defvar nix-shell-buffer-name)
+(declare-function nix-shell "nix-shell")
+
+;;;###autoload
+(defun nix-package-shell (attribute)
+  "Install nix package ATTRIBUTE."
+  (interactive (nix-package-read-attribute))
+  (let* ((package-name (nix-attribute-to-package attribute))
+         (nix-shell-buffer-name (format "*nix-shell/%s*" package-name)))
+    (nix-shell "-p" package-name)))
+
+(defun nix-package-show (attribute)
+  "Display information about nix package ATTRIBUTE."
+  (interactive (nix-package-read-attribute))
+  (let-alist (nix-package-fetch-json attribute)
+    (cl-labels ((show-license (license) (cl-typecase license
+                                          (stringp license)
+                                          (listp (let-alist license
+                                                   (let ((license-name (or .fullName .shortName .spdxId)))
+                                                     (if .url (nix-link-button .url license-name) license-name))))))
+                (show-homepage (url) (cl-typecase url
+                                       (stringp (nix-link-button url))
+                                       (vectorp (apply #'nix-join-lines (mapcar #'nix-link-button url))))))
+      (nix-insert-format "*NixPkg*"
+        :package .name
+        :attribute (propertize attribute 'face 'font-lock-variable-name-face)
+        :homepage (show-homepage (or .meta.homepage .meta.downloadPage))
+        :license (show-license .meta.license)
+        :system .system
+        :position (make-text-button (nix-prettify .meta.position) nil 'type 'nix-package-declaration 'target .meta.position)
+        :description (or .meta.longDescription .meta.description)))))
 
 ;;;###autoload
 (defun nix-package-list ()

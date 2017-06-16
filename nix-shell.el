@@ -29,6 +29,15 @@
 ;; TODO:
 ;;
 ;; + [ ] Document integration with FlyCheck and related tools
+;;
+;; Flycheck:
+;;
+;;     (setq flycheck-command-wrapper-function 'todo
+;;           flycheck-executable-find 'todo)
+;;
+;; Haskell Mode:
+;;
+;;     (setq haskell-process-wrapper-function 'todo)
 
 ;;; Code:
 (eval-when-compile
@@ -64,11 +73,13 @@ The topmost match has precedence."
   :type '(repeat string)
   :group 'nix-shell)
 
+(defvar nix-shell-buffer-name "*nix-shell*")
 (defvar nix-shell-variables-cache (make-hash-table :test 'equal))
 (defvar nix-shell-old-process-environment nil
   "The old process environment before the last activate.")
 (defvar nix-shell-old-exec-path nil
   "The old exec path before the last activate.")
+(defvar nix-shell-command-history nil)
 
 (cl-defstruct (nix-shell (:constructor nix-shell-new))
   "A structure holding the information of nix-shell."
@@ -148,6 +159,18 @@ ARGS are passed to nix-shell executable to generate the nix shell environment."
                (process-environment (nix-shell-process-environment ,shell-vars)))
            ,@body)
        (user-error "Not inside a nix-shell project: %s" ,directory))))
+
+(defvar explicit-nix-shell-args)
+
+;; NB: In a future honor `NIX_BUILD_SHELL' when start nix-shell. See:
+;;     gh:NixOS/nix#730, gh:NixOS/nix#498, gh:NixOS/nix#777
+;;;###autoload
+(defun nix-shell (&rest args)
+  "Run an inferior shell, with I/O, if CREATE is non-nil generate newa nix-shell with ARGS."
+  (interactive (split-string (read-string "nix-shell args: " nil 'nix-shell-command-history) " " 'omit-nulls))
+  (let ((explicit-shell-file-name nix-shell-executable)
+        (explicit-nix-shell-args args))
+    (shell nix-shell-buffer-name)))
 
 (provide 'nix-shell)
 ;;; nix-shell.el ends here

@@ -4,7 +4,7 @@
 
 ;; Author: Mario Rodas <marsam@users.noreply.github.com>
 ;; Version: 0.1
-;; Package-Requires: ((emacs "24"))
+;; Package-Requires: ((emacs "24.4"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -26,7 +26,18 @@
 ;;; Commentary:
 
 ;;; Code:
+(eval-when-compile (require 'subr-x))
 (require 'tramp)
+
+(defface nix-option-value
+  '((t :weight bold))
+  "Face for nix values descriptions."
+  :group 'nix)
+
+(defface nix-not-given
+  '((t :inherit font-lock-comment-face))
+  "Face for not given values examples."
+  :group 'nix)
 
 ;; Shamelessly stolen from: https://github.com/alezost/guix.el/blob/e1dfd96/elisp/guix-prettify.el
 (defvar nix-prettify-regexp
@@ -35,6 +46,18 @@
       ;; at <https://github.com/NixOS/nix/blob/f8b84a3/src/libutil/hash.cc>
       "/" (group (= 32 (any "0-9" "a-d" "f-n" "p-s" "v-z"))))
   "Regexp matching file names for prettifying.")
+
+(defun nix-button-browse-url (button)
+  "Open web browser on page pointed to by BUTTON target property."
+  (browse-url (button-get button 'target)))
+
+(define-button-type 'nix-browse-url
+  'action #'nix-button-browse-url
+  'help-echo "mouse-2, RET: goto homepage")
+
+(defun nix-link-button (url &optional name)
+  "Create a button for URL with NAME."
+  (make-text-button (or name url) nil 'type 'nix-browse-url 'target url))
 
 (defun nix-prettify (file-name)
   "Prettify nix store FILE-NAME."
@@ -64,6 +87,10 @@
   "If STRING-OR-SYMBOL is already a string, return it.  Otherwise convert it to a string and return that."
   (if (stringp string-or-symbol) string-or-symbol (symbol-name string-or-symbol)))
 
+(defsubst nix-keyword-to-string (keyword)
+  "Convert a KEYWORD to a symbol, by removing leading colon (:) character."
+  (if (keywordp keyword) (substring (symbol-name keyword) 1) keyword))
+
 (defun nix-exec-insert (program &rest args)
   "Execute PROGRAM with ARGS, inserting its output at point."
   (apply #'process-file program nil (list t nil) nil args))
@@ -92,7 +119,7 @@
 
 (defun nix-exec (program &rest args)
   "Execute PROGRAM with ARGS in a compilation buffer."
-  (compilation-start (mapconcat #'shell-quote-argument (cons program args) " ")))
+  (compilation-start (mapconcat #'shell-quote-argument (cons program (delq nil args)) " ")))
 
 (defsubst nix-goto-line (n)
   "Go to line N."
@@ -100,6 +127,29 @@
     (widen)
     (goto-char (point-min))
     (forward-line (1- n))))
+
+(defsubst nix-attribute-to-package (attribute)
+  "Return a package name from an nix ATTRIBUTE."
+  (string-trim-left attribute (regexp-opt '("nixos." "nixpkgs."))))
+
+(defsubst nix-join-lines (&rest strings)
+  "Join all STRINGS using newlines."
+  (mapconcat 'identity strings "\n"))
+
+(defun nix-indent-string (string &optional length)
+  "Indent STRING to LENGTH from line start."
+  (replace-regexp-in-string "^" (make-string (or length 4) 32) string))
+
+(defun nix-insert-format (buffer-or-name &rest properties)
+  "Something BUFFER-OR-NAME and return a formatted PROPERTIES."
+  (declare (indent 1))
+  (with-help-window (get-buffer-create buffer-or-name)
+    (with-current-buffer standard-output
+      (cl-loop for (key value) on properties by #'cddr
+               do (insert (propertize (upcase (nix-keyword-to-string key)) 'face 'nix-option-value)
+                          "\n"
+                          (nix-indent-string (or value (propertize "Not specified" 'face 'font-lock-comment-face)))
+                          "\n")))))
 
 (defun nix-login-name (file)
   "Return the name under which the user accesses the given FILE."
@@ -113,28 +163,29 @@
       ;; if user-login-name is nil, return the UID as a string
       (number-to-string (user-uid))))
 
-(defun nix-file-relative (filename directory)
+(defun nix-file-relative (filename &optional directory)
   "Return a tramp-aware for FILENAME in DIRECTORY."
-  (if (file-remote-p directory)
-      (let ((vec (tramp-dissect-file-name directory)))
-        (condition-case nil
-            (tramp-make-tramp-file-name
-             (tramp-file-name-method vec)
-             (tramp-file-name-user vec)
-             (tramp-file-name-domain vec)
-             (tramp-file-name-host vec)
-             (tramp-file-name-port vec)
-             filename
-             (tramp-file-name-hop vec))
-          (wrong-number-of-arguments
-           (with-no-warnings
-             (tramp-make-tramp-file-name
-              (tramp-file-name-method vec)
-              (tramp-file-name-user vec)
-              (tramp-file-name-host vec)
-              filename
-              (tramp-file-name-hop vec))))))
-    filename))
+  (let ((directory (or directory default-directory)))
+    (if (file-remote-p directory)
+        (let ((vec (tramp-dissect-file-name directory)))
+          (condition-case nil           ; New `tramp-file-name' since Emacs26.1
+              (tramp-make-tramp-file-name
+               (tramp-file-name-method vec)
+               (tramp-file-name-user vec)
+               (tramp-file-name-domain vec)
+               (tramp-file-name-host vec)
+               (tramp-file-name-port vec)
+               filename
+               (tramp-file-name-hop vec))
+            (wrong-number-of-arguments
+             (with-no-warnings
+               (tramp-make-tramp-file-name
+                (tramp-file-name-method vec)
+                (tramp-file-name-user vec)
+                (tramp-file-name-host vec)
+                filename
+                (tramp-file-name-hop vec))))))
+      filename)))
 
 ;; Shamelessly stolen from `ansible-doc'.
 (defun nix-fontify-text (text &optional mode)

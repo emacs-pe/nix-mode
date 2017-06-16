@@ -56,6 +56,14 @@
   "A struct holding the information of a Nix channel."
   name url)
 
+(defun nix-channel-button-browse-url (button)
+  "Open web browser on page pointed to by BUTTON."
+  (browse-url (button-get button 'target)))
+
+(define-button-type 'nix-channel-browse-url
+  'action #'nix-channel-button-browse-url
+  'help-echo "mouse-2, RET: goto homepage")
+
 (defun nix-channel-entries ()
   "Return a list current available nix-env generations as `nix-channel' structs."
   (cl-loop for line in (nix-exec-lines nix-channel-executable "--list")
@@ -65,7 +73,18 @@
 
 (defun nix-channel-list-entries ()
   "Return a entry `tabulated-list-entries' for nix generations."
-  (mapcar (lambda (chan) (list (nix-channel-name chan) chan)) (nix-channel-entries)))
+  (cl-labels ((link-button (url) (make-text-button url nil 'type 'nix-package-browse-url 'target url)))
+    (mapcar (lambda (chan)
+              (list (nix-channel-name chan)
+                    (vector (nix-channel-name chan)
+                            (link-button (nix-channel-url chan)))))
+            (nix-channel-entries))))
+
+(defun nix-channel-do-add (url name)
+  "Add a channel named name with URL url with NAME to the list of subscribed channels."
+  (interactive (list (read-string "Channel url: ")
+                     (read-string "Channel name: ")))
+  (nix-exec nix-channel-executable "--add" url (unless (string-empty-p name) name)))
 
 (defun nix-channel-do-update (&optional arg)
   "Install ARG entries."
@@ -78,20 +97,22 @@
 See `tablist-operations-function' for more information."
   (cl-ecase operation
     (delete (cl-multiple-value-bind (ids) arguments
-              ;; FIXME: Deleting multiple channels
-              (apply #'nix-exec nix-channel-executable "--remove" ids)))
+              (if (/= (length ids) 1)
+                  (user-error "Each channel must be remove individually")
+                (apply #'nix-exec nix-channel-executable "--remove" ids))))
     (find-entry (cl-multiple-value-bind (id) arguments
                   (let ((filename (format "/nix/var/nix/profiles/per-user/%s/channels/%s" (nix-login-name default-directory) id)))
                     (find-file (nix-file-relative filename default-directory)))))
     (supported-operations '(delete find-entry))))
 
-(defconst nix-channel-list-mode-map
+(defvar nix-channel-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
     (define-key map (kbd "RET") 'tablist-find-entry)
     (define-key map "f" 'tablist-find-entry)
     (define-key map "D" 'tablist-do-delete)
-    (define-key map "U" 'nix-channel-do-update)
+    (define-key map "+" 'nix-channel-do-add)
+    (define-key map "R" 'nix-channel-do-update)
     map)
   "Local keymap for `nix-channel-list-mode' buffers.")
 
@@ -112,7 +133,10 @@ See `tablist-operations-function' for more information."
 (defun nix-channel-list ()
   "Show a list of available nix-packages."
   (interactive)
-  (with-current-buffer (get-buffer-create "*nix-channels*")
+  (with-current-buffer (get-buffer-create
+                        (if (file-remote-p default-directory)
+                            (format "*nix-channels: %s*" (nix-file-relative ""))
+                          "*nix-channels*"))
     (nix-channel-list-mode)
     (tabulated-list-print)
     (pop-to-buffer (current-buffer))))
