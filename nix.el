@@ -164,10 +164,15 @@ Return a fontified copy of TEXT."
                              (get-text-property pos 'face))))
       (buffer-string))))
 
+;; Shamelessly stolen from: https://github.com/magnars/s.el/blob/fc395c8/s.el#L445-L462
 (defun nix-regexp-match (regexp string &optional start)
-  "When the given expression matches the string, this function returns a list
-of the whole matching string and a string for each matched subexpressions.
-If it did not match the returned value is an empty list (nil).
+  "Retrieve the match of REGEXP against a matching STRING.
+
+Behaves like JavaScript's String.prototype.match.  When the given
+expression matches the string, this function returns a list of
+the whole matching string and a string for each matched
+sub-expressions.  If it did not match the returned value is an
+empty list (nil).
 
 When START is non-nil the search will start at that index."
   (save-match-data
