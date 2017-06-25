@@ -63,6 +63,89 @@
   :type '(alist string)
   :group 'nix-repl)
 
+(defun nix-repl-get-process ()
+  "Return inferior nix-repl process for current buffer."
+  (get-buffer-process (if (derived-mode-p 'nix-repl-cli-mode) (current-buffer) nix-repl-process-buffer-name)))
+
+(defun nix-repl-get-process-or-error (&optional interactivep)
+  "Return inferior nix-repl process for current buffer or signal error.
+
+When argument INTERACTIVEP is non-nil, use `user-error' instead
+of `error' with a user-friendly message."
+  (or (nix-repl-get-process)
+      (if interactivep
+          (user-error "Start a Nix-repl process first with `M-x run-nix' or `%s'" (key-description (where-is-internal #'run-nix overriding-local-map t)))
+        (error "No inferior nix-repl process running"))))
+
+(defun nix-repl-send-string (string &optional process msg)
+  "Send STRING to inferior nix-repl PROCESS.
+
+When optional argument MSG is non-nil, forces display of a
+user-friendly message if there's no process running; defaults to
+t when called interactively."
+  (interactive (list (read-string "Nix command: ") nil t))
+  (let ((process (or process (nix-repl-get-process-or-error msg))))
+    (comint-send-string process string)
+    (when (or (not (string-match "\n\\'" string))
+              (string-match "\n[ \t].*\n?\\'" string))
+      (comint-send-string process "\n"))))
+
+(defvar nix-repl-output-filter-in-progress nil)
+(defvar nix-repl-output-filter-buffer nil)
+
+(defun nix-repl-comint-end-of-output-p (output)
+  "Return non-nil if OUTPUT is ends with input prompt."
+  (string-match
+   ;; XXX: It seems on macOS an extra carriage return is attached
+   ;; at the end of output, this handles that too.
+   (concat
+    "\r?\n?"
+    ;; Remove initial caret from calculated regexp
+    (replace-regexp-in-string (rx string-start ?^) "" nix-repl-cli-prompt-regexp)
+    (rx eos))
+   output))
+
+(defun nix-repl-output-filter (string)
+  "Filter used in `nix-repl-send-string-no-output' to grab output.
+STRING is the output received to this point from the process.
+This filter saves received output from the process in
+`nix-repl-output-filter-buffer' and stops receiving it after
+detecting a prompt at the end of the buffer."
+  (setq
+   string (ansi-color-filter-apply string)
+   nix-repl-output-filter-buffer
+   (concat nix-repl-output-filter-buffer string))
+  (when (nix-repl-comint-end-of-output-p
+         nix-repl-output-filter-buffer)
+    ;; Output ends when `nix-repl-output-filter-buffer' contains
+    ;; the prompt attached at the end of it.
+    (setq nix-repl-output-filter-in-progress nil
+          nix-repl-output-filter-buffer
+          (substring nix-repl-output-filter-buffer
+                     0 (match-beginning 0))))
+  "")
+
+(defun nix-repl-send-string-no-output (string &optional process)
+  "Send STRING to PROCESS and inhibit output.
+Return the output."
+  (let ((process (or process (nix-repl-get-process-or-error)))
+        (comint-preoutput-filter-functions
+         '(nix-repl-output-filter))
+        (nix-repl-output-filter-in-progress t)
+        (inhibit-quit t))
+    (or
+     (with-local-quit
+       (nix-repl-send-string string process)
+       (while nix-repl-output-filter-in-progress
+         ;; `nix-repl-output-filter' takes care of setting
+         ;; `nix-repl-output-filter-in-progress' to NIL after it detects end of
+         ;; output.
+         (accept-process-output process))
+       (prog1 nix-repl-output-filter-buffer
+         (setq nix-repl-output-filter-buffer nil)))
+     (with-current-buffer (process-buffer process)
+       (comint-interrupt-subjob)))))
+
 (define-derived-mode nix-repl-cli-mode comint-mode "nix-repl"
   "Major mode for `nix-repl-cli'.
 
