@@ -220,10 +220,10 @@ FROM-HOMEPAGE is non-nil will download options file from
         nix-package-packages (make-hash-table :test 'equal))
   (and (derived-mode-p 'nix-package-list-mode) (tabulated-list-revert)))
 
-(defconst nix-package-list-mode-map
+(defvar nix-package-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
-    (define-key map "S" 'nix-package-shell)
+    (define-key map "S" 'nix-package-do-shell)
     (define-key map "R" 'nix-package-do-revert)
     (define-key map "i" 'nix-package-do-install)
     (define-key map (kbd "RET") 'nix-package-show)
@@ -256,12 +256,19 @@ FROM-HOMEPAGE is non-nil will download options file from
       (cdr (assq (nix-as-symbol pkgname) (json-read-from-string out)))
     (user-error "Package %s not found" pkgname)))
 
+(defun nix-package-do-shell (&optional arg)
+  "Install ARG entries."
+  (interactive "P")
+  (cl-assert (tablist-get-marked-items arg) nil "You need to select a package(s) to install")
+  (apply #'nix-shell "-p" (mapcar (lambda (item) (nix-attribute-to-package (car item))) (tablist-get-marked-items arg))))
+
 (defun nix-package-do-install (&optional arg)
   "Install ARG entries."
   (interactive "P")
   (cl-assert (tablist-get-marked-items arg) nil "You need to select a package(s) to install")
   (apply #'nix-exec nix-package-nix-env-executable (mapcan (lambda (item) (list "-iA" (car item))) (tablist-get-marked-items arg))))
 
+;;;###autoload
 (defun nix-package-install (attribute)
   "Install nix package ATTRIBUTE."
   (interactive (nix-package-read-attribute))
@@ -278,6 +285,7 @@ FROM-HOMEPAGE is non-nil will download options file from
          (nix-shell-buffer-name (format "*nix-shell/%s*" package-name)))
     (nix-shell "-p" package-name)))
 
+;;;###autoload
 (defun nix-package-show (attribute)
   "Display information about nix package ATTRIBUTE."
   (interactive (nix-package-read-attribute))
