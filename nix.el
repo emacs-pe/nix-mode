@@ -30,8 +30,8 @@
 (require 'tramp)
 
 (defface nix-option-value
-  '((t :weight bold))
-  "Face for nix values descriptions."
+  '((t :inherit (bold font-lock-function-name-face)))
+  "Face used on section names in package description buffers."
   :group 'nix)
 
 (defface nix-not-given
@@ -148,7 +148,7 @@
       (cl-loop for (key value) on properties by #'cddr
                do (insert (propertize (upcase (nix-keyword-to-string key)) 'face 'nix-option-value)
                           "\n"
-                          (nix-indent-string (or value (propertize "Not specified" 'face 'font-lock-comment-face)))
+                          (nix-indent-string (or value (propertize "Not specified" 'face 'nix-not-given)))
                           "\n")))))
 
 (defun nix-login-name (file)

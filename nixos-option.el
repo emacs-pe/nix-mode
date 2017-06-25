@@ -34,8 +34,8 @@
   (require 'subr-x)
   (require 'let-alist))
 
-(require 'json)
 (require 'nix)
+(require 'json)
 
 (defgroup nix-option nil
   "Interface for NixOS options."
@@ -52,19 +52,7 @@
   :type 'booleanp
   :group 'nix-option)
 
-(defface nixos-option-value
-  '((t :weight bold))
-  "Face for nix-options values descriptions."
-  :group 'nix-option)
-
-(defface nixos-option-not-given
-  '((t :inherit font-lock-comment-face))
-  "Face for not given values examples."
-  :group 'nix-option)
-
-
 (defvar nixos-option-indent-default 4)
-(defvar nixos-option-empty-string "not given")
 (defvar nixos-option-show-history nil)
 (defvar nixos-option-show-buffer-name "*NixOS option*")
 (defvar nixos-option-process-environment '("LC_ALL=C" "NIXPKGS_ALLOW_UNFREE=1")
@@ -159,7 +147,7 @@ is non-nil will download options file from nixos.org."
   "Return a string for an nix OPTION default, prettified if PRETTY is non-nil."
   (if-let (default (nixos-option-default option))
       (nix-fontify-text (nixos-option-json-encode default pretty) 'nix-mode)
-    (propertize nixos-option-empty-string 'face 'nixos-option-not-given)))
+    (propertize "Not specified" 'face 'nix-not-given)))
 
 (defun nixos-option-display-example (option &optional pretty)
   "Return a string for a nix OPTION example, prettified if PRETTY is non-nil."
@@ -168,7 +156,7 @@ is non-nil will download options file from nixos.org."
                             (cdr (assq 'text example)) ; XXX: it is a literal example.
                           (nixos-option-json-encode example pretty))
                         'nix-mode)
-    (propertize nixos-option-empty-string 'face 'nixos-option-not-given)))
+    (propertize "Not specified" 'face 'nix-not-given)))
 
 (defun nixos-option-display-declarations (option)
   "Return a display string of a nix OPTION declaration."
@@ -196,22 +184,22 @@ is non-nil will download options file from nixos.org."
 Used for show information about a nix option."
   (string-join (list
                 (format "%s\n%s"
-                        (propertize "NAME" 'face 'nixos-option-value)
+                        (propertize "NAME" 'face 'nix-option-value)
                         (nixos-option-indent (propertize (nixos-option-name option) 'face 'font-lock-variable-name-face)))
                 (format "%s\n%s"
-                        (propertize "DESCRIPTION" 'face 'nixos-option-value)
+                        (propertize "DESCRIPTION" 'face 'nix-option-value)
                         (nixos-option-indent (nixos-option-description option)))
                 (format "%s\n%s"
-                        (propertize "TYPE" 'face 'nixos-option-value)
+                        (propertize "TYPE" 'face 'nix-option-value)
                         (nixos-option-indent (nixos-option-type option)))
                 (format "%s\n%s"
-                        (propertize "DEFAULT" 'face 'nixos-option-value)
+                        (propertize "DEFAULT" 'face 'nix-option-value)
                         (nixos-option-indent (nixos-option-display-default option 'pretty)))
                 (format "%s\n%s"
-                        (propertize "EXAMPLE" 'face 'nixos-option-value)
+                        (propertize "EXAMPLE" 'face 'nix-option-value)
                         (nixos-option-indent (nixos-option-display-example option 'pretty)))
                 (format "%s\n%s"
-                        (propertize "DECLARATIONS" 'face 'nixos-option-value)
+                        (propertize "DECLARATIONS" 'face 'nix-option-value)
                         (nixos-option-indent (nixos-option-display-declarations option))))
                "\n"))
 
