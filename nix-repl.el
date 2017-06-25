@@ -31,6 +31,7 @@
 ;; TODO:
 ;;
 ;; + [ ] Add completion support.
+;; + [ ] nix-repl was included in update to nix 1.12. https://github.com/edolstra/nix-repl/commit/ad0c46b
 
 ;;; Code:
 (require 'comint)
@@ -44,11 +45,16 @@
 
 (defcustom nix-repl-executable "nix-repl"
   "Path to nix-repl executable path."
-  :type 'file
+  :type '(file :must-match t)
+  :group 'nix-repl)
+
+(defcustom nix-repl-history-file (expand-file-name "~/.nix-repl-history")
+  "Path to nix-repl executable path."
+  :type '(file :must-match t)
   :group 'nix-repl)
 
 (defvar nix-repl-process-buffer-name "*nix-repl*")
-(defvar nix-repl-cli-prompt-regexp "^nix-repl> ")
+(defconst nix-repl-cli-prompt-regexp "^nix-repl> ")
 
 (defcustom nix-repl-compilation-regexp-alist
   `((,(rx "error: " (+ not-newline) " at " (? "\"") (group (minimal-match (+ not-newline))) (? "\"") ":" (group (+ num)) ":" (group (+ num)))
@@ -64,9 +70,14 @@
   (setq-local comint-process-echoes t)
   (setq-local comint-prompt-read-only t)
   (setq-local comint-prompt-regexp nix-repl-cli-prompt-regexp)
+  (setq-local comint-input-ring-file-name nix-repl-history-file)
+  (comint-read-input-ring t)
   (setq-local compilation-error-regexp-alist nix-repl-compilation-regexp-alist)
   (define-key nix-repl-cli-mode-map "\t" 'completion-at-point)
   (compilation-shell-minor-mode 1))
+
+;;;###autoload
+(defalias 'run-nix #'nix-repl)
 
 ;;;###autoload
 (defun nix-repl ()
