@@ -58,16 +58,6 @@
   :type 'booleanp
   :group 'nix-package)
 
-(defface nix-package-value
-  '((t :weight bold))
-  "Face for nix-package values descriptions."
-  :group 'nix-package)
-
-(defface nix-package-not-given
-  '((t :inherit font-lock-comment-face))
-  "Face for not given values examples."
-  :group 'nix-package)
-
 (defvar nix-package-loaded-p nil)
 (defvar nix-package-show-history nil)
 (defvar nix-package-packages (make-hash-table :test 'equal))
@@ -300,7 +290,7 @@ FROM-HOMEPAGE is non-nil will download options file from
                                        (vectorp (apply #'nix-join-lines (mapcar #'nix-link-button url))))))
       (nix-insert-format "*NixPkg*"
         :package .name
-        :attribute (propertize attribute 'face 'font-lock-variable-name-face)
+        :attribute (propertize attribute 'face 'nix-value)
         :homepage (show-homepage (or .meta.homepage .meta.downloadPage))
         :license (show-license .meta.license)
         :system .system

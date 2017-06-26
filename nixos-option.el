@@ -182,26 +182,13 @@ is non-nil will download options file from nixos.org."
   "Return an option string from OPTION.
 
 Used for show information about a nix option."
-  (string-join (list
-                (format "%s\n%s"
-                        (propertize "NAME" 'face 'nix-option-value)
-                        (nixos-option-indent (propertize (nixos-option-name option) 'face 'font-lock-variable-name-face)))
-                (format "%s\n%s"
-                        (propertize "DESCRIPTION" 'face 'nix-option-value)
-                        (nixos-option-indent (nixos-option-description option)))
-                (format "%s\n%s"
-                        (propertize "TYPE" 'face 'nix-option-value)
-                        (nixos-option-indent (nixos-option-type option)))
-                (format "%s\n%s"
-                        (propertize "DEFAULT" 'face 'nix-option-value)
-                        (nixos-option-indent (nixos-option-display-default option 'pretty)))
-                (format "%s\n%s"
-                        (propertize "EXAMPLE" 'face 'nix-option-value)
-                        (nixos-option-indent (nixos-option-display-example option 'pretty)))
-                (format "%s\n%s"
-                        (propertize "DECLARATIONS" 'face 'nix-option-value)
-                        (nixos-option-indent (nixos-option-display-declarations option))))
-               "\n"))
+  (nix-format-properties
+   :name (propertize (nixos-option-name option) 'face 'nix-value)
+   :description (nixos-option-description option)
+   :type (nixos-option-type option)
+   :default (nixos-option-display-default option 'pretty)
+   :example (nixos-option-display-example option 'pretty)
+   :declarations (nixos-option-display-declarations option)))
 
 ;;;###autoload
 (defun nixos-option-show (name)

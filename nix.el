@@ -25,14 +25,21 @@
 
 ;;; Commentary:
 
+;; Common utilities for `nix-mode'
+
 ;;; Code:
 (eval-when-compile (require 'subr-x))
 (require 'tramp)
 
-(defface nix-option-value
+(defface nix-section
   '((t :inherit (bold font-lock-function-name-face)))
   "Face used on section names in package description buffers."
   :group 'nix)
+
+(defface nix-value
+  '((t :weight bold))
+  "Face for nix-package values descriptions."
+  :group 'nix-package)
 
 (defface nix-not-given
   '((t :inherit font-lock-comment-face))
@@ -140,16 +147,20 @@
   "Indent STRING to LENGTH from line start."
   (replace-regexp-in-string "^" (make-string (or length 4) 32) string))
 
+(defun nix-format-properties (&rest properties)
+  "Return an string from PROPERTIES."
+  (cl-loop for (key value) on properties by #'cddr
+           nconc (list (propertize (upcase (nix-keyword-to-string key)) 'face 'nix-section)
+                       (nix-indent-string (or value (propertize "Not specified" 'face 'nix-not-given))))
+           into output
+           finally return (apply #'nix-join-lines output)))
+
 (defun nix-insert-format (buffer-or-name &rest properties)
-  "Something BUFFER-OR-NAME and return a formatted PROPERTIES."
+  "Insert into BUFFER-OR-NAME a formatted plist PROPERTIES."
   (declare (indent 1))
   (with-help-window (get-buffer-create buffer-or-name)
     (with-current-buffer standard-output
-      (cl-loop for (key value) on properties by #'cddr
-               do (insert (propertize (upcase (nix-keyword-to-string key)) 'face 'nix-option-value)
-                          "\n"
-                          (nix-indent-string (or value (propertize "Not specified" 'face 'nix-not-given)))
-                          "\n")))))
+      (insert (apply #'nix-format-properties properties)))))
 
 (defun nix-login-name (file)
   "Return the name under which the user accesses the given FILE."
