@@ -97,7 +97,7 @@
 
 When FORCE is non-nil will recreate if already exists."
   (and (or force (not (file-readable-p file-name)))
-       (with-temp-file file-name (nix-exec-insert "nix-env" "--query" "--available" "--json"))))
+       (with-temp-file file-name (nix-exec-insert nix-package-nix-env-executable "--query" "--available" "--json"))))
 
 (defun nix-package-http-fetch (file-name &optional force)
   "Fetch nix options from NixOS homepage and save it to FILE-NAME.
@@ -154,9 +154,11 @@ FROM-HOMEPAGE is non-nil will download options file from
   "Open web browser on page pointed to by BUTTON."
   (cl-multiple-value-bind (_match filename line)
       (nix-regexp-match nix-package-location-regexp (button-get button 'target))
-    (with-current-buffer (find-file-noselect filename)
-      (nix-goto-line (string-to-number line))
-      (switch-to-buffer (current-buffer)))))
+    (if (file-exists-p filename)
+        (with-current-buffer (find-file-noselect filename)
+          (nix-goto-line (string-to-number line))
+          (switch-to-buffer (current-buffer)))
+      (error "%s does not exist" filename))))
 
 (define-button-type 'nix-package-declaration
   'action #'nix-package-button-find-file
@@ -301,7 +303,7 @@ FROM-HOMEPAGE is non-nil will download options file from
 (defun nix-package-list ()
   "Show a list of available nix-packages."
   (interactive)
-  (with-current-buffer (get-buffer-create nix-package-list-buffer-name)
+  (with-current-buffer (get-buffer-create (nix-tramp-buffer-name "nix-packages"))
     (nix-package-list-mode)
     (tabulated-list-print)
     (pop-to-buffer (current-buffer))))

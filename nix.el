@@ -28,7 +28,9 @@
 ;; Common utilities for `nix-mode'
 
 ;;; Code:
-(eval-when-compile (require 'subr-x))
+(eval-when-compile
+  (require 'cl-lib)
+  (require 'subr-x))
 (require 'tramp)
 
 (defface nix-section
@@ -162,7 +164,7 @@
     (with-current-buffer standard-output
       (insert (apply #'nix-format-properties properties)))))
 
-(defun nix-login-name (file)
+(cl-defun nix-login-name (&optional (file default-directory))
   "Return the name under which the user accesses the given FILE."
   (or (and (file-remote-p file)
            ;; tramp case: execute "whoami" via tramp
@@ -174,29 +176,45 @@
       ;; if user-login-name is nil, return the UID as a string
       (number-to-string (user-uid))))
 
-(defun nix-file-relative (filename &optional directory)
+(cl-defun nix-tramp-buffer-name (name &optional (directory default-directory))
+  "Return a shell buffer NAME for DIRECTORY."
+  (if (file-remote-p directory)
+      (let ((vec (tramp-dissect-file-name directory)))
+        (if (fboundp 'tramp-file-name-real-host) ; Old versions of TRAMP
+            (let ((user (tramp-file-name-user vec))
+                  (host (tramp-file-name-real-host vec)))
+              (if (zerop (length user)) (format "*%s/%s*" name host) (format "*%s/%s@%s*" name user host)))
+          (let ((user-domain (tramp-file-name-user-domain vec))
+                (host-port (tramp-file-name-host-port vec)))
+            (if (zerop (length user-domain)) (format "*%s/%s*" name host-port) (format "*%s/%s@%s*" name user-domain host-port)))))
+    (format "*%s*" name)))
+
+(cl-defun nix-tramp-file-relative (filename &optional (directory default-directory))
   "Return a tramp-aware for FILENAME in DIRECTORY."
-  (let ((directory (or directory default-directory)))
-    (if (file-remote-p directory)
-        (let ((vec (tramp-dissect-file-name directory)))
-          (condition-case nil           ; New `tramp-file-name' since Emacs26.1
-              (tramp-make-tramp-file-name
-               (tramp-file-name-method vec)
-               (tramp-file-name-user vec)
-               (tramp-file-name-domain vec)
-               (tramp-file-name-host vec)
-               (tramp-file-name-port vec)
-               filename
-               (tramp-file-name-hop vec))
-            (wrong-number-of-arguments
-             (with-no-warnings
-               (tramp-make-tramp-file-name
-                (tramp-file-name-method vec)
-                (tramp-file-name-user vec)
-                (tramp-file-name-host vec)
-                filename
-                (tramp-file-name-hop vec))))))
-      filename)))
+  (if (file-remote-p directory)
+      (let ((vec (tramp-dissect-file-name directory)))
+        (condition-case nil           ; New `tramp-file-name' since Emacs26.1
+            (tramp-make-tramp-file-name
+             (tramp-file-name-method vec)
+             (tramp-file-name-user vec)
+             (tramp-file-name-domain vec)
+             (tramp-file-name-host vec)
+             (tramp-file-name-port vec)
+             filename
+             (tramp-file-name-hop vec))
+          (wrong-number-of-arguments
+           (with-no-warnings
+             (tramp-make-tramp-file-name
+              (tramp-file-name-method vec)
+              (tramp-file-name-user vec)
+              (tramp-file-name-host vec)
+              filename
+              (tramp-file-name-hop vec))))))
+    filename))
+
+(defun nix-find-file-relative (filename)
+  "Edit the existing file tramp-aware FILENAME."
+  (find-file-existing (nix-tramp-file-relative filename)))
 
 ;; Shamelessly stolen from `ansible-doc'.
 (defun nix-fontify-text (text &optional mode)

@@ -171,7 +171,7 @@ is non-nil will download options file from nixos.org."
 
 (defun nixos-option-decl-action (button)
   "Find file for declaration BUTTON."
-  (find-file (nixos-option-locate-declaration (button-get button 'declaration))))
+  (find-file-existing (nixos-option-locate-declaration (button-get button 'declaration))))
 
 (defun nixos-option-indent (string &optional length)
   "Indent STRING to LENGTH from line start."

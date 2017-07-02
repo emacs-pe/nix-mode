@@ -26,6 +26,8 @@
 
 ;;; Commentary:
 
+;; Nix generations integration
+
 ;;; Code:
 (eval-when-compile
   (require 'cl-lib)
@@ -69,6 +71,13 @@
          (cl-loop for (attr . _entry) in (tablist-get-marked-items arg)
                   collect attr)))
 
+(defun nix-generation-find (id)
+  "Find nix generation by ID."
+  (let ((system-generation (format "/nix/var/nix/profiles/default-%s-link" id)))
+    (if (file-exists-p (nix-tramp-file-relative system-generation))
+        system-generation
+      (format "/nix/var/nix/profiles/per-user/%s/profile-%s-link" (nix-login-name) id))))
+
 (defun nix-generation-tablist-operations (operation &rest arguments)
   "Function for tablist OPERATION  and is called with ARGUMENTS.
 
@@ -77,10 +86,10 @@ See `tablist-operations-function' for more information."
     (delete (cl-multiple-value-bind (ids) arguments
               (apply #'nix-exec nix-package-nix-env-executable "--delete-generations" ids)))
     (find-entry (cl-multiple-value-bind (id) arguments
-                  (find-file (format "/nix/var/nix/profiles/default-%s-link" id))))
+                  (nix-find-file-relative (nix-generation-find id))))
     (supported-operations '(delete find-entry))))
 
-(defconst nix-generation-list-mode-map
+(defvar nix-generation-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
     (define-key map (kbd "RET") 'tablist-find-entry)
@@ -107,7 +116,7 @@ See `tablist-operations-function' for more information."
 (defun nix-generation-list ()
   "Show a list of available nix-packages."
   (interactive)
-  (with-current-buffer (get-buffer-create "*nix-generations*")
+  (with-current-buffer (get-buffer-create (nix-tramp-buffer-name "nix-generations"))
     (nix-generation-list-mode)
     (tabulated-list-print)
     (pop-to-buffer (current-buffer))))

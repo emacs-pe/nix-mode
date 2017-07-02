@@ -101,8 +101,7 @@ See `tablist-operations-function' for more information."
                   (user-error "Each channel must be remove individually")
                 (apply #'nix-exec nix-channel-executable "--remove" ids))))
     (find-entry (cl-multiple-value-bind (id) arguments
-                  (let ((filename (format "/nix/var/nix/profiles/per-user/%s/channels/%s" (nix-login-name default-directory) id)))
-                    (find-file (nix-file-relative filename default-directory)))))
+                  (nix-find-file-relative (format "/nix/var/nix/profiles/per-user/%s/channels/%s" (nix-login-name) id))))
     (supported-operations '(delete find-entry))))
 
 (defvar nix-channel-list-mode-map
@@ -133,10 +132,7 @@ See `tablist-operations-function' for more information."
 (defun nix-channel-list ()
   "Show a list of available nix-packages."
   (interactive)
-  (with-current-buffer (get-buffer-create
-                        (if (file-remote-p default-directory)
-                            (format "*nix-channels: %s*" (nix-file-relative ""))
-                          "*nix-channels*"))
+  (with-current-buffer (get-buffer-create (nix-tramp-buffer-name "nix-channels"))
     (nix-channel-list-mode)
     (tabulated-list-print)
     (pop-to-buffer (current-buffer))))
