@@ -258,7 +258,7 @@ FROM-HOMEPAGE is non-nil will download options file from
   "Install ARG entries."
   (interactive "P")
   (cl-assert (tablist-get-marked-items arg) nil "You need to select a package(s) to install")
-  (apply #'nix-exec nix-package-nix-env-executable (mapcan (lambda (item) (list "-iA" (car item))) (tablist-get-marked-items arg))))
+  (apply #'nix-exec nix-package-nix-env-executable (cl-mapcan (lambda (item) (list "-iA" (car item))) (tablist-get-marked-items arg))))
 
 ;;;###autoload
 (defun nix-package-install (attribute)
