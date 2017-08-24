@@ -162,12 +162,18 @@ ARGS are passed to nix-shell executable to generate the nix shell environment."
 
 (defvar explicit-nix-shell-args)
 
+(defun nix-shell-read-args (prompt)
+  "Read nix-shell args with PROMPT."
+  (and current-prefix-arg (split-string (read-string prompt nil 'nix-shell-command-history) " " 'omit-nulls)))
+
+(defvar explicit-shell-file-name)
+
 ;; NB: In a future honor `NIX_BUILD_SHELL' when start nix-shell. See:
 ;;     gh:NixOS/nix#730, gh:NixOS/nix#498, gh:NixOS/nix#777
 ;;;###autoload
 (defun nix-shell (&rest args)
   "Run an inferior shell, with I/O, if CREATE is non-nil generate newa nix-shell with ARGS."
-  (interactive (split-string (read-string "nix-shell args: " nil 'nix-shell-command-history) " " 'omit-nulls))
+  (interactive (nix-shell-read-args "nix-shell args: "))
   (let ((explicit-shell-file-name nix-shell-executable)
         (explicit-nix-shell-args args))
     (shell nix-shell-buffer-name)))
