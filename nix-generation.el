@@ -74,7 +74,7 @@
 (defun nix-generation-find (id)
   "Find nix generation by ID."
   (let ((system-generation (format "/nix/var/nix/profiles/default-%s-link" id)))
-    (if (file-exists-p (nix-tramp-file-relative system-generation))
+    (if (file-exists-p (nix-file-relative system-generation))
         system-generation
       (format "/nix/var/nix/profiles/per-user/%s/profile-%s-link" (nix-login-name) id))))
 

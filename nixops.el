@@ -72,7 +72,7 @@
 (defun nixops-find (id)
   "Find nix generation by ID."
   (let ((system-generation (format "/nix/var/nix/profiles/default-%s-link" id)))
-    (if (file-exists-p (nix-tramp-file-relative system-generation))
+    (if (file-exists-p (nix-file-relative system-generation))
         system-generation
       (format "/nix/var/nix/profiles/per-user/%s/profile-%s-link" (nix-login-name) id))))
 
@@ -87,6 +87,19 @@ See `tablist-operations-function' for more information."
                   (nix-find-file-relative (nixops-find id))))
     (supported-operations '(delete find-entry))))
 
+(defun nixops-tramp-file-name (machine deployment)
+  "Return a for MACHINE at DEPLOYMENT."
+  ;; TODO: handle tramp hops
+  (nix-make-tramp-file-name "nixops" machine nil deployment nil ""))
+
+(defun nixops-ssh (&optional pos)
+  "Open a ssh from POS."
+  (interactive)
+  (if-let (entry (tabulated-list-get-entry pos))
+      (cl-multiple-value-bind (_resource deployment machine _status _type _ip) (append entry nil)
+        (find-file (nixops-tramp-file-name machine deployment)))
+    (user-error "Not nixops declaration at point")))
+
 (defvar nixops-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
@@ -96,7 +109,7 @@ See `tablist-operations-function' for more information."
     map)
   "Local keymap for `nixops-list-mode' buffers.")
 
-(define-derived-mode nixops-list-mode tabulated-list-mode "nixopss"
+(define-derived-mode nixops-list-mode tabulated-list-mode "nixops"
   "List available nix packages.
 
 \\{nixops-list-mode-map}"
@@ -117,7 +130,7 @@ See `tablist-operations-function' for more information."
 (defun nixops-list ()
   "Show a list of available nix-packages."
   (interactive)
-  (with-current-buffer (get-buffer-create (nix-tramp-buffer-name "nixopss"))
+  (with-current-buffer (get-buffer-create (nix-tramp-buffer-name "nixops"))
     (nixops-list-mode)
     (tabulated-list-print)
     (pop-to-buffer (current-buffer))))

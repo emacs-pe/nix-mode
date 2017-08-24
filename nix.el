@@ -48,6 +48,19 @@
   "Face for not given values examples."
   :group 'nix)
 
+
+;; NB: TRAMP 2.3.2 introduced `tramp-file-name' struct which offers these
+;;     functions to access the slots.
+(or (fboundp 'tramp-file-name-domain) (defalias 'tramp-file-name-domain #'ignore))
+(or (fboundp 'tramp-file-name-port) (defalias 'tramp-file-name-port #'ignore))
+
+(defalias 'nix-make-tramp-file-name
+  (if (version< tramp-version "2.3.2")
+      (with-no-warnings
+        (lambda (method user _domain host _port localname &optional hop)
+          (tramp-make-tramp-file-name method user host localname hop)))
+    #'tramp-make-tramp-file-name))
+
 ;; Shamelessly stolen from: https://github.com/alezost/guix.el/blob/e1dfd96/elisp/guix-prettify.el
 (defvar nix-prettify-regexp
   (rx "/" (or "store" "log" (and "nar" (zero-or-one "/gzip")))
@@ -180,41 +193,22 @@
   "Return a shell buffer NAME for DIRECTORY."
   (if (file-remote-p directory)
       (let ((vec (tramp-dissect-file-name directory)))
-        (if (fboundp 'tramp-file-name-real-host) ; Old versions of TRAMP
-            (let ((user (tramp-file-name-user vec))
-                  (host (tramp-file-name-real-host vec)))
-              (if (zerop (length user)) (format "*%s/%s*" name host) (format "*%s/%s@%s*" name user host)))
-          (let ((user-domain (tramp-file-name-user-domain vec))
-                (host-port (tramp-file-name-host-port vec)))
-            (if (zerop (length user-domain)) (format "*%s/%s*" name host-port) (format "*%s/%s@%s*" name user-domain host-port)))))
+        (if (and (fboundp 'tramp-file-name-user-domain) (fboundp 'tramp-file-name-host-port))
+            (let ((user-domain (tramp-file-name-user-domain vec))
+                  (host-port (tramp-file-name-host-port vec)))
+              (if (zerop (length user-domain)) (format "*%s/%s*" name host-port) (format "*%s/%s@%s*" name user-domain host-port)))
+          (let ((user (tramp-file-name-user vec))
+                (host (if (fboundp 'tramp-file-name-real-host) (tramp-file-name-real-host vec) (tramp-file-name-host vec))))
+            (if (zerop (length user)) (format "*%s/%s*" name host) (format "*%s/%s@%s*" name user host)))))
     (format "*%s*" name)))
 
-(cl-defun nix-tramp-file-relative (filename &optional (directory default-directory))
-  "Return a tramp-aware for FILENAME in DIRECTORY."
-  (if (file-remote-p directory)
-      (let ((vec (tramp-dissect-file-name directory)))
-        (condition-case nil           ; New `tramp-file-name' since Emacs26.1
-            (tramp-make-tramp-file-name
-             (tramp-file-name-method vec)
-             (tramp-file-name-user vec)
-             (tramp-file-name-domain vec)
-             (tramp-file-name-host vec)
-             (tramp-file-name-port vec)
-             filename
-             (tramp-file-name-hop vec))
-          (wrong-number-of-arguments
-           (with-no-warnings
-             (tramp-make-tramp-file-name
-              (tramp-file-name-method vec)
-              (tramp-file-name-user vec)
-              (tramp-file-name-host vec)
-              filename
-              (tramp-file-name-hop vec))))))
-    filename))
+(defun nix-file-relative (filename)
+  "Return the relative the existing file tramp-aware FILENAME."
+  (concat (file-remote-p default-directory) filename))
 
 (defun nix-find-file-relative (filename)
   "Edit the existing file tramp-aware FILENAME."
-  (find-file-existing (nix-tramp-file-relative filename)))
+  (find-file-existing (nix-file-relative filename)))
 
 ;; Shamelessly stolen from `ansible-doc'.
 (defun nix-fontify-text (text &optional mode)

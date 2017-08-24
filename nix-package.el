@@ -154,8 +154,8 @@ FROM-HOMEPAGE is non-nil will download options file from
   "Open web browser on page pointed to by BUTTON."
   (cl-multiple-value-bind (_match filename line)
       (nix-regexp-match nix-package-location-regexp (button-get button 'target))
-    (if (file-exists-p filename)
-        (with-current-buffer (find-file-noselect filename)
+    (if (file-exists-p (nix-file-relative filename))
+        (with-current-buffer (find-file-noselect (nix-file-relative filename))
           (nix-goto-line (string-to-number line))
           (switch-to-buffer (current-buffer)))
       (error "%s does not exist" filename))))
