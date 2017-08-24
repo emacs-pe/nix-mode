@@ -150,9 +150,13 @@
     (goto-char (point-min))
     (forward-line (1- n))))
 
-(defsubst nix-attribute-to-package (attribute)
+(defun nix-attribute-spec (attribute)
+  "Return a list repo and path from an nix ATTRIBUTE."
+  (nix-split-up-to "\\." attribute 1))
+
+(defun nix-attribute-to-package (attribute)
   "Return a package name from an nix ATTRIBUTE."
-  (string-trim-left attribute (regexp-opt '("nixos." "nixpkgs."))))
+  (elt (nix-attribute-spec attribute) 1))
 
 (defsubst nix-join-lines (&rest strings)
   "Join all STRINGS using newlines."
@@ -261,6 +265,30 @@ When START is non-nil the search will start at that index."
               (setq match-data-list
                     (cddr match-data-list))))
           (nreverse result)))))
+
+(defun nix-split-up-to (separator string n &optional omit-nulls)
+  "Split by SEPARATOR a STRING up to N times.
+
+If OMIT-NULLS is non-nil, zero-length substrings are omitted."
+  (save-match-data
+    (let ((op 0)
+          (r nil))
+      (with-temp-buffer
+        (insert string)
+        (setq op (goto-char (point-min)))
+        (while (and (re-search-forward separator nil t)
+                    (< 0 n))
+          (let ((sub (buffer-substring op (match-beginning 0))))
+            (unless (and omit-nulls
+                         (equal sub ""))
+              (push sub r)))
+          (setq op (goto-char (match-end 0)))
+          (setq n (1- n)))
+        (let ((sub (buffer-substring op (point-max))))
+          (unless (and omit-nulls
+                       (equal sub ""))
+            (push sub r))))
+      (nreverse r))))
 
 (provide 'nix)
 ;;; nix.el ends here

@@ -32,7 +32,8 @@
 (eval-when-compile
   (require 'cl-lib)
   (require 'subr-x)
-  (require 'let-alist))
+  (require 'let-alist)
+  (defvar url-http-end-of-headers))
 
 (require 'json)
 (require 'tablist)
@@ -48,23 +49,22 @@
   :type '(file :must-match t)
   :group 'nix-package)
 
-(defcustom nix-package-file (expand-file-name "nix-package.json" "~/.nix-defexpr/")
-  "Path where will be downloaded the nix options file from the NixOS homepage."
-  :type '(file :must-match t)
-  :group 'nix-package)
-
 (defcustom nix-package-from-homepage-p nil
-  "Whether to use nix-package file from homepage."
+  "Whether to use nix-package file from homepage.
+
+This option is provided on a best-effort basis, so not all the
+features are available using this method.
+
+See: `https://nixos.org/nixos/packages.html'."
   :type 'booleanp
   :group 'nix-package)
 
-(defvar nix-package-loaded-p nil)
 (defvar nix-package-show-history nil)
-(defvar nix-package-packages (make-hash-table :test 'equal))
 (defvar nix-package-truncate-width 79)
-(defvar nix-package-list-buffer-name "*nix-packages*")
 (defconst nix-package-location-regexp (rx (group-n 1 (+ (not (any " \n")))) ":" (group-n 2 (+ num)))
   "Regexp for location of a nix expression.")
+
+(defvar-local nix-package-packages nil)
 
 (cl-defstruct (nix-package
                (:constructor nil)
@@ -83,68 +83,55 @@
 
 (defun nix-package-collect (json-object)
   "Collect nix candidates from the JSON-OBJECT."
-  (dolist (item json-object)
-    (let-alist item
-      (puthash (nix-as-string (car item))
-               (nix-package-new :name .name
-                                :homepage (or .meta.homepage .meta.downloadPage)
-                                :position .meta.position
-                                :description .meta.description)
-               nix-package-packages))))
+  (let ((table (make-hash-table :test 'equal)))
+    (dolist (item json-object)
+      (let-alist item
+        (puthash (nix-as-string (car item))
+                 (nix-package-new :name .name
+                                  :homepage (or .meta.homepage .meta.downloadPage)
+                                  :position .meta.position
+                                  :description .meta.description)
+                 table)))
+    table))
 
-(defun nix-package-generate-json (file-name &optional force)
-  "Generate json from available packages and save to FILE-NAME.
+(defun nix-package-generate-json (&rest _args)
+  "Generate json from available packages with ARGS.
 
 When FORCE is non-nil will recreate if already exists."
-  (and (or force (not (file-readable-p file-name)))
-       (with-temp-file file-name (nix-exec-insert nix-package-nix-env-executable "--query" "--available" "--json"))))
+  (with-temp-buffer
+    (nix-exec-insert nix-package-nix-env-executable "--query" "--available" "--json")
+    (goto-char (point-min))
+    (json-read)))
 
-(defun nix-package-http-fetch (file-name &optional force)
+(defun nix-package-http-fetch ()
   "Fetch nix options from NixOS homepage and save it to FILE-NAME.
 
 When FORCE is non-nil will recreate if already exists."
-  (and force (file-exists-p file-name) (delete-file file-name))
-  (and (or force (not (file-readable-p file-name)))
-       (url-copy-file nix-package-json-url file-name)))
+  (with-current-buffer (url-retrieve-synchronously nix-package-json-url)
+    (goto-char (1+ url-http-end-of-headers))
+    (cdr (assq 'packages (json-read-from-string (decode-coding-string (buffer-substring-no-properties (point) (point-max)) 'utf-8))))))
 
-(defun nix-package-ensure-json (file-name &optional force from-homepage)
-  "Ensure NixOS packages json file or generate one to FILE-NAME.
+(defun nix-package-data (&optional from-homepage)
+  "Fetch data from nix packages.
 
-If FORCE is non-nil will recreate the file if already exists.  If
-FROM-HOMEPAGE is non-nil, will download the json options from the
-official website."
+If FROM-HOMEPAGE is non-nil, will download the json options from
+the official website."
   (if from-homepage
-      (nix-package-http-fetch file-name force)
+      (nix-package-http-fetch)
     (condition-case err
-        (nix-package-generate-json file-name force)
+        (nix-package-generate-json)
       (error
        (if (y-or-n-p (format "Building packages json failed: %S.  Do you to use nix options from NixOS homepage? " (error-message-string err)))
-           (nix-package-http-fetch file-name force)
+           (nix-package-http-fetch)
          (signal (car err) (cdr err)))))))
 
-(defun nix-package-file (&optional force from-homepage)
-  "Get nix-package-file or generate one.
-
-If FORCE is non-nil will recreate the file if already exists.  If
-FROM-HOMEPAGE is non-nil, will download the json options from the
-official website."
-  (when (or force (not (file-readable-p nix-package-file)))
-    (message "Generating nix-package file... ")
-    (nix-package-ensure-json nix-package-file force from-homepage))
-  nix-package-file)
-
-(defun nix-package-packages (&optional force from-homepage)
-  "Populate `nix-package' hash-table.
-
-If FORCE is non-nil will reload from `nix-package-file' json.  If
-FROM-HOMEPAGE is non-nil will download options file from
-`https://nixos.org/nixos/packages.html'."
-  (when (or force (not nix-package-loaded-p))
-    (message "loading Nix packages...")
-    (nix-package-collect (json-read-file (nix-package-file force (or from-homepage nix-package-from-homepage-p))))
-    (setq nix-package-loaded-p t)
-    (message "loaded Nix packages"))
-  nix-package-packages)
+(cl-defun nix-package-packages ()
+  "Populate `nix-package-packages' hash-table."
+  (with-current-buffer (if (derived-mode-p 'nix-package-list-mode) (current-buffer) (get-buffer-create (nix-tramp-buffer-name "nix-packages")))
+    (unless nix-package-packages
+      (message "[%S] loading Nix packages..." (buffer-name))
+      (setq-local nix-package-packages (nix-package-collect (nix-package-data nix-package-from-homepage-p))))
+    nix-package-packages))
 
 (defun nix-package-button-browse-url (button)
   "Open web browser on page pointed to by BUTTON."
@@ -192,32 +179,20 @@ FROM-HOMEPAGE is non-nil will download options file from
   "Return an tabulated-list entry representation for ATTR and PACKAGE description."
   (if-let (description (nix-package-description package)) (nix-package-truncate-string description) ""))
 
-(defun nix-package-entry (attr package)
-  "Return a tabulated list entry for ATTR a nix PACKAGE struct."
-  (vector (nix-package-entry-name attr package)
-          (nix-package-entry-description attr package)
-          (nix-package-entry-homepage attr package)))
-
 (defun nix-package-list-entries ()
   "Return a list of entries for `nix-package-list' tabulated mode."
   (cl-loop for attr being the hash-keys of (nix-package-packages)
            using (hash-value package)
-           collect (list attr (nix-package-entry attr package))))
-
-(defun nix-package-do-revert ()
-  "Regenerate the `nix-package-file' cache."
-  (interactive)
-  (and (file-exists-p nix-package-file) (delete-file nix-package-file))
-  (setq nix-package-loaded-p nil
-        nix-package-packages (make-hash-table :test 'equal))
-  (and (derived-mode-p 'nix-package-list-mode) (tabulated-list-revert)))
+           collect (list attr (vector (nix-package-entry-name attr package)
+                                      (nix-package-entry-description attr package)
+                                      (nix-package-entry-homepage attr package)))))
 
 (defvar nix-package-list-mode-map
   (let ((map (make-sparse-keymap)))
     (set-keymap-parent map tabulated-list-mode-map)
     (define-key map "S" 'nix-package-do-shell)
-    (define-key map "R" 'nix-package-do-revert)
     (define-key map "i" 'nix-package-do-install)
+    (define-key map "b" 'nix-package-browse)
     (define-key map (kbd "RET") 'nix-package-show)
     map)
   "Local keymap for `nix-package-list-mode' buffers.")
@@ -226,11 +201,11 @@ FROM-HOMEPAGE is non-nil will download options file from
   "List available nix packages.
 
 \\{nix-package-list-mode-map}"
-  (setq tabulated-list-padding 2
-        tabulated-list-entries 'nix-package-list-entries
-        tabulated-list-format [("name" 36 t :read-only t)
+  (setq tabulated-list-format [("name" 36 t :read-only t)
                                ("description" 80 nil :read-only t)
-                               ("homepage" 120 nil :read-only t)])
+                               ("homepage" 120 nil :read-only t)]
+        tabulated-list-padding 2
+        tabulated-list-entries 'nix-package-list-entries)
   (tabulated-list-init-header))
 
 (add-hook 'nix-package-list-mode-hook #'tablist-minor-mode)
@@ -265,6 +240,14 @@ FROM-HOMEPAGE is non-nil will download options file from
   "Install nix package ATTRIBUTE."
   (interactive (nix-package-read-attribute))
   (nix-exec nix-package-nix-env-executable "-iA" attribute))
+
+;;;###autoload
+(defun nix-package-browse (attribute)
+  "Build an browse a package ATTRIBUTE."
+  (interactive (nix-package-read-attribute))
+  (cl-multiple-value-bind (repo package)
+      (nix-attribute-spec attribute)
+    (nix-find-file-relative (nix-exec-string "nix-build" (format "<%s>" repo) "--no-out-link" "-A" package))))
 
 (defvar nix-shell-buffer-name)
 (declare-function nix-shell "nix-shell")
@@ -306,7 +289,7 @@ FROM-HOMEPAGE is non-nil will download options file from
   (with-current-buffer (get-buffer-create (nix-tramp-buffer-name "nix-packages"))
     (nix-package-list-mode)
     (tabulated-list-print)
-    (pop-to-buffer (current-buffer))))
+    (switch-to-buffer (current-buffer))))
 
 (provide 'nix-package)
 ;;; nix-package.el ends here
