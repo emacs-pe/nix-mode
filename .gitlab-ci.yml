@@ -1,0 +1,25 @@
+.job_template: &emacs  # Hidden key that defines an anchor named 'emacs'
+  image: buildpack-deps:jessie
+  before_script:
+    - export PATH="$HOME/bin:$PATH"
+    - wget https://github.com/flycheck/emacs-travis/raw/master/emacs-travis.mk
+    - make -f emacs-travis.mk install_emacs install_cask
+    - make compile
+  script:
+    - make test
+
+test:25.1:
+  <<: *emacs
+  variables:
+    EMACS_VERSION: "25.1"
+
+test:25.2:
+  <<: *emacs
+  variables:
+    EMACS_VERSION: "25.2"
+
+test:snapshot:
+  <<: *emacs
+  allow_failure: true
+  variables:
+    EMACS_VERSION: "snapshot"

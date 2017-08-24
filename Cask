@@ -4,12 +4,17 @@
 (package-file "nix-mode.el")
 
 (files
+ "nix.el"
  "nix-mode.el"
- "company-nix.el"
- "nix-options.el"
  "nix-repl.el"
  "nix-shell.el"
- "nix-common.el"
+ "nix-channel.el"
+ "nix-package.el"
+ "nix-generation.el"
+ "nixos-option.el"
+ "company-nixos-option.el"
+ "nixops.el"
+ "nixops-tramp.el"
  )
 
 (depends-on "tablist")
