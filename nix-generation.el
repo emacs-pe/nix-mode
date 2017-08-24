@@ -71,6 +71,15 @@
          (cl-loop for (attr . _entry) in (tablist-get-marked-items arg)
                   collect attr)))
 
+(declare-function ztree-diff "ztree-diff")
+
+(defun nix-generation-diff (gen1 gen2)
+  "Show a difference between generations GEN1 and GEN2."
+  (interactive (list (completing-read "Generation 1: " (funcall tabulated-list-entries))
+                     (completing-read "Generation 2: " (funcall tabulated-list-entries))))
+  (cl-assert (fboundp 'ztree-diff) nil "`%s' needs `ztree' package installed" this-command)
+  (ztree-diff (nix-file-relative (nix-generation-find gen1)) (nix-file-relative (nix-generation-find gen2))))
+
 (defun nix-generation-find (id)
   "Find nix generation by ID."
   (let ((system-generation (format "/nix/var/nix/profiles/default-%s-link" id)))
