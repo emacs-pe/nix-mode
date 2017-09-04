@@ -127,9 +127,10 @@ ARGS are passed to nix-shell executable to generate the nix shell environment."
                nix-shell-variables-cache)))
 
 ;;;###autoload
-(defun nix-shell-active (directory)
+(defun nix-shell-activate (directory)
   "Activate the nix-shell in DIRECTORY."
   (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
+  (nix-shell-deactivate)
   (if-let (shell-vars (nix-shell-variables (file-truename directory)))
       (setq nix-shell-old-exec-path exec-path
             nix-shell-old-process-environment process-environment
