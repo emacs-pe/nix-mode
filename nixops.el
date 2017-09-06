@@ -1,11 +1,11 @@
-;;; nixops.el --- Nix generations integration -*- lexical-binding: t -*-
+;;; nixops.el --- NixOps integration        -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2017 Mario Rodas <marsam@users.noreply.github.com>
 
 ;; Author: Mario Rodas <marsam@users.noreply.github.com>
 ;; Keywords: convenience
 ;; Version: 0.1
-;; Package-Requires: ((emacs "25.1") (let-alist "1.0.1") (tablist "0.70"))
+;; Package-Requires: ((emacs "25.1") (tablist "0.70"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -26,32 +26,31 @@
 
 ;;; Commentary:
 
-;; Nix generations integration
+;; NixOps integration.  See: <URL:https://nixos.org/nixops/>.
 
 ;;; Code:
 (eval-when-compile
   (require 'cl-lib)
   (require 'subr-x))
-(require 'tablist)
 (require 'nix)
-(require 'nix-package)
+(require 'tablist)
 
 (defgroup nixops nil
-  "Interface for NixOS genarations."
+  "Interface for NixOps."
   :prefix "nixops-"
   :group 'nix)
 
 (defcustom nixops-executable "nixops"
-  "Path to nixops executable."
+  "Path to NixOps executable."
   :type '(file :must-match t)
   :group 'nixops)
 
 (cl-defstruct (nixops (:constructor nixops-new))
-  "A struct holding the information of a Nix generation"
+  "A struct holding the information of a NixOps deployment."
   uuid resource-id deployment machine status type ip-address)
 
 (defun nixops-entries ()
-  "Return a list current available nix-env generations as `nixops' structs."
+  "Return a list current available NixOps deployments as `nixops' structs."
   (cl-loop for line in (nix-exec-lines nixops-executable "info" "--all" "--plain")
            collect (cl-multiple-value-bind (uuid deployment machine status type resource-id ip-address)
                        (split-string line "\t")
@@ -69,13 +68,6 @@
                           (nixops-ip-address d))))
           (nixops-entries)))
 
-(defun nixops-find (id)
-  "Find nix generation by ID."
-  (let ((system-generation (format "/nix/var/nix/profiles/default-%s-link" id)))
-    (if (file-exists-p (nix-file-relative system-generation))
-        system-generation
-      (format "/nix/var/nix/profiles/per-user/%s/profile-%s-link" (nix-login-name) id))))
-
 (defun nixops-tablist-operations (operation &rest arguments)
   "Function for tablist OPERATION  and is called with ARGUMENTS.
 
@@ -84,13 +76,20 @@ See `tablist-operations-function' for more information."
     (delete (cl-multiple-value-bind (ids) arguments
               (apply #'nix-exec nixops-executable "delete" "-d" ids)))
     (find-entry (cl-multiple-value-bind (id) arguments
-                  (nix-find-file-relative (nixops-find id))))
+                  (nixops-info id)))
     (supported-operations '(delete find-entry))))
 
 (defun nixops-tramp-file-name (machine deployment)
   "Return a for MACHINE at DEPLOYMENT."
   ;; TODO: handle tramp hops
   (nix-make-tramp-file-name "nixops" machine nil deployment nil ""))
+
+(defun nixops-info (deployment)
+  "Show info about a DEPLOYMENT."
+  (interactive "sDeployment: ")
+  (with-help-window (get-buffer-create "*Nixops deployment*")
+    (with-current-buffer standard-output
+      (insert (nix-exec-output nixops-executable "info" "-d" deployment)))))
 
 (defun nixops-ssh (&optional pos)
   "Open a ssh from POS."

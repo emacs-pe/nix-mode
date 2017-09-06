@@ -117,12 +117,6 @@
   "Execute PROGRAM with ARGS, inserting its output at point."
   (apply #'process-file program nil (list t nil) nil args))
 
-(defun nix-exec-lines (program &rest args)
-  "Execute PROGRAM with ARGS, returning its output as a list of lines."
-  (with-temp-buffer
-    (apply #'nix-exec-insert program args)
-    (split-string (buffer-string) "\n" 'omit-nulls)))
-
 (defun nix-exec-string (program &rest args)
   "Execute PROGRAM with ARGS, returning the first line of its output."
   (with-temp-buffer
@@ -130,6 +124,16 @@
     (unless (bobp)
       (goto-char (point-min))
       (buffer-substring-no-properties (point) (line-end-position)))))
+
+(defun nix-exec-output (program &rest args)
+  "Execute PROGRAM with ARGS, returning the output."
+  (with-temp-buffer
+    (apply #'nix-exec-insert program args)
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(defun nix-exec-lines (program &rest args)
+  "Execute PROGRAM with ARGS, returning its output as a list of lines."
+  (split-string (apply #'nix-exec-output program args) "\n" 'omit-nulls))
 
 (defun nix-exec-exit-code (program &rest args)
   "Execute PROGRAM with ARGS, returning its exit code."
