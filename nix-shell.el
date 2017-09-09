@@ -85,15 +85,25 @@ The topmost match has precedence."
   "A structure holding the information of nix-shell."
   exec-path process-environment)
 
-(defun nix-shell-locate-root-directory (directory)
-  "Locate a project root DIRECTORY for a nix directory."
+(cl-defun nix-shell-locate-root-directory (&optional (directory default-directory))
+  "Locate a nix project root for a DIRECTORY."
   (cl-loop for file in nix-shell-files
            when (locate-dominating-file directory file)
-           return it))
+           return (expand-file-name file it)))
 
-(defun nix-shell-root (directory)
+(cl-defun nix-shell-locate-expression (&optional (directory default-directory))
+  "Locate a nix-shell expression from `nix-shell-files' for a DIRECTORY."
+  (cl-loop for file in nix-shell-files
+           when (locate-dominating-file directory file)
+           return (expand-file-name file it)))
+
+(cl-defun nix-shell-root (&optional (directory default-directory))
   "Return a nix sandbox project root from DIRECTORY."
   (or nix-shell-root (nix-shell-locate-root-directory directory)))
+
+(defun nix-shell-read-args (prompt)
+  "Read nix-shell args with PROMPT."
+  (and current-prefix-arg (split-string-and-unquote (read-string prompt nil 'nix-shell-command-history))))
 
 (defun nix-shell-extract-exec-path ()
   "Add paths from PATH environment variable to `exec-path'.  Does not modify `exec-path'."
@@ -105,7 +115,7 @@ The topmost match has precedence."
 ;;;###autoload
 (defun nix-shell-invalidate-cache (&optional directory)
   "Invalidate nix-shell variables cache for DIRECTORY."
-  (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
+  (interactive (list (and current-prefix-arg (completing-read "Directory: " nix-shell-variables-cache nil t))))
   (if directory
       (remhash directory nix-shell-variables-cache)
     (clrhash nix-shell-variables-cache)))
@@ -113,30 +123,33 @@ The topmost match has precedence."
 (defalias 'nix-shell-variables #'nix-shell-register)
 
 ;;;###autoload
-(defun nix-shell-register (directory &rest args)
-  "Get the environment variables from a nix-shell from DIRECTORY.
+(defun nix-shell-register (path &rest args)
+  "Get the environment variables from a nix-shell expression PATH.
 
-ARGS are passed to nix-shell executable to generate the nix shell environment."
-  (interactive "Dregister nix-shell: ")
-  (or (gethash directory nix-shell-variables-cache)
-      (puthash directory (nix-with-default-directory directory
-                           ;; XXX: Check if the nix sandbox is ready for consumption
-                           (cl-assert (nix-exec-success nix-shell-executable "--run" "true") nil "Nix shell is not available in %s" directory)
-                           (let ((process-environment (apply #'nix-exec-lines nix-shell-executable (append '("--run" "printenv") args))))
-                             (nix-shell-new :exec-path (nix-shell-extract-exec-path) :process-environment process-environment)))
+ARGS are passed to nix-shell executable to generate the nix shell
+environment."
+  (interactive (cons (read-file-name "Nix expression path: " nil nil t (nix-shell-locate-expression))
+                     (nix-shell-read-args "Nix-shell extra args: ")))
+  (or (gethash path nix-shell-variables-cache)
+      (puthash path (nix-with-default-directory (file-name-directory path) ;; FIXME: necessary anymore?
+                      ;; XXX: Check if the nix sandbox is ready for consumption
+                      (cl-assert (apply #'nix-exec-success nix-shell-executable (append (list path "--run" "true") args)) nil "Could not validate nix-shell with expression %s" path)
+                      (let ((process-environment (apply #'nix-exec-lines nix-shell-executable (append (list path "--run" "printenv") args))))
+                        (nix-shell-new :exec-path (nix-shell-extract-exec-path) :process-environment process-environment)))
                nix-shell-variables-cache)))
 
 ;;;###autoload
-(defun nix-shell-activate (directory)
-  "Activate the nix-shell in DIRECTORY."
-  (interactive (list (completing-read "Directory: " nix-shell-variables-cache nil t)))
+(defun nix-shell-activate (path &rest args)
+  "Activate the nix-shell for expression PATH with ARGS."
+  (interactive (cons (read-file-name "Nix expression path: " nil nil t (nix-shell-locate-expression))
+                     (nix-shell-read-args "Nix-shell extra args: ")))
   (nix-shell-deactivate)
-  (if-let (shell-vars (nix-shell-variables (file-truename directory)))
+  (if-let (shell-vars (apply #'nix-shell-variables (file-truename path) args))
       (setq nix-shell-old-exec-path exec-path
             nix-shell-old-process-environment process-environment
             exec-path (nix-shell-exec-path shell-vars)
             process-environment (nix-shell-process-environment shell-vars))
-    (user-error "Not inside a nix-shell project: %s" directory)))
+    (user-error "Not inside a nix-shell project: %s" path)))
 
 ;;;###autoload
 (defun nix-shell-deactivate ()
@@ -162,11 +175,6 @@ ARGS are passed to nix-shell executable to generate the nix shell environment."
        (user-error "Not inside a nix-shell project: %s" ,directory))))
 
 (defvar explicit-nix-shell-args)
-
-(defun nix-shell-read-args (prompt)
-  "Read nix-shell args with PROMPT."
-  (and current-prefix-arg (split-string (read-string prompt nil 'nix-shell-command-history) " " 'omit-nulls)))
-
 (defvar explicit-shell-file-name)
 
 ;; NB: In a future honor `NIX_BUILD_SHELL' when start nix-shell. See:
